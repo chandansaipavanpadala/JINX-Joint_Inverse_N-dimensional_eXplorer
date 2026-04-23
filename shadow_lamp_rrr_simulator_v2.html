@@ -1,0 +1,1842 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>3-DOF RRR Occlusion-Avoidance Lamp — Simulator</title>
+  <meta name="description"
+    content="3-DOF RRR robotic desk lamp: IK, Jacobian analysis, occlusion-avoidance simulation.">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <style>
+    :root {
+      --bg: #04040a;
+      --bg2: rgba(15, 15, 28, 0.72);
+      --bg3: rgba(24, 24, 40, 0.85);
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #f0f0f5;
+      --muted: #8080a8;
+      --gold: #ffcc00;
+      --goldb: #ffeb3b;
+      --cyan: #00e5ff;
+      --grn: #00f07f;
+      --red2: #ff4d4d;
+      --accent: #6c5ce7;
+      --panel-blur: 18px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
+    body {
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      font-size: 13px;
+      color: var(--text);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .layout {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    /* Glassmorphism Header */
+    .hbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 24px;
+      background: rgba(10, 10, 20, 0.6);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      z-index: 10;
+    }
+
+    .htitle {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: #fff;
+    }
+
+    .hsub {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .badge {
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 9px;
+      font-weight: 700;
+      background: rgba(255, 204, 0, 0.1);
+      color: var(--gold);
+      border: 1px solid rgba(255, 204, 0, 0.2);
+      margin-left: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .body-row {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Canvas Area */
+    #cw {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background: #020205;
+    }
+
+    #cw canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    /* Improved HUD */
+    .hud {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(8, 8, 16, 0.65);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 18px;
+      backdrop-filter: blur(var(--panel-blur));
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      pointer-events: none;
+      line-height: 1.8;
+      z-index: 5;
+    }
+
+    .hud b {
+      color: var(--gold);
+      font-weight: 500;
+      margin-right: 4px;
+    }
+
+    .hud div {
+      margin-bottom: 2px;
+    }
+
+    .hud .ok {
+      color: var(--grn);
+    }
+
+    .hud .bad {
+      color: var(--red2);
+    }
+
+    .cam-hint {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.25);
+      pointer-events: none;
+      font-weight: 300;
+    }
+
+    /* Glassmorphism Sidebar Panel */
+    .panel {
+      width: 340px;
+      flex-shrink: 0;
+      border-left: 1px solid var(--border);
+      background: var(--bg2);
+      backdrop-filter: blur(var(--panel-blur));
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      z-index: 8;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    .panel::-webkit-scrollbar {
+      width: 5px;
+    }
+
+    .panel::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 10px;
+    }
+
+    /* Modern Tabs */
+    .tabs {
+      display: flex;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 4px;
+      gap: 4px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tab {
+      flex: 1;
+      padding: 10px 0;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--muted);
+      border: none;
+      background: none;
+      border-radius: 6px;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .tab:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .tab.active {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.1);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    /* Pane & Sections */
+    .pane {
+      padding: 20px;
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+      animation: fadeIn 0.3s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(4px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .pane.on {
+      display: flex;
+    }
+
+    .sec {
+      font-size: 10px;
+      font-weight: 800;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 2px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sec::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* Improved Controls */
+    .ctrl {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .ctrl-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .ctrl label {
+      font-size: 12px;
+      color: var(--text);
+      flex: 1;
+      font-weight: 400;
+    }
+
+    .ctrl input[type=range] {
+      flex: 1;
+      -webkit-appearance: none;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      outline: none;
+    }
+
+    .ctrl input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--gold);
+      cursor: pointer;
+      border: 3px solid #1a1a2e;
+      box-shadow: 0 0 10px rgba(255, 204, 0, 0.3);
+      transition: transform 0.1s;
+    }
+
+    .ctrl input[type=range]:active::-webkit-slider-thumb {
+      transform: scale(1.2);
+    }
+
+    .val {
+      min-width: 50px;
+      text-align: right;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--gold);
+      font-weight: 600;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    /* Cards */
+    .cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .card {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      transition: border-color 0.2s;
+    }
+
+    .card:hover {
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .cl {
+      font-size: 9px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+
+    .cv {
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .cv.ok {
+      color: var(--grn);
+    }
+
+    .cv.warn {
+      color: var(--red2);
+    }
+
+    /* Alerts */
+    .alert {
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 11px;
+      background: rgba(255, 77, 77, 0.1);
+      border: 1px solid rgba(255, 77, 77, 0.2);
+      color: #ff9999;
+      display: none;
+      line-height: 1.4;
+    }
+
+    .alert.on {
+      display: block;
+      animation: shake 0.4s ease-in-out;
+    }
+
+    @keyframes shake {
+
+      0%,
+      100% {
+        transform: translateX(0)
+      }
+
+      25% {
+        transform: translateX(-4px)
+      }
+
+      75% {
+        transform: translateX(4px)
+      }
+    }
+
+    .info-box {
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 11px;
+      background: rgba(0, 229, 255, 0.06);
+      border: 1px solid rgba(0, 229, 255, 0.15);
+      color: #a0f0ff;
+      line-height: 1.5;
+    }
+
+    /* Table */
+    .dht {
+      border-collapse: separate;
+      border-spacing: 0;
+      width: 100%;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .dht th {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 9px;
+      text-transform: uppercase;
+      padding: 8px;
+      text-align: center;
+    }
+
+    .dht td {
+      background: transparent;
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      padding: 8px;
+      border-top: 1px solid var(--border);
+      text-align: center;
+    }
+
+    /* Jacobian Matrix */
+    .jgrid {
+      display: grid;
+      grid-template-columns: 24px repeat(3, 1fr);
+      gap: 4px;
+    }
+
+    .jc {
+      border-radius: 6px;
+      padding: 8px 4px;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--border);
+      text-align: center;
+    }
+
+    /* Premium Button */
+    .sbtn {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #ffcc00, #ff9900);
+      color: #000;
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      letter-spacing: 0.02em;
+      box-shadow: 0 4px 15px rgba(255, 153, 0, 0.3);
+    }
+
+    .sbtn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(255, 153, 0, 0.4);
+    }
+
+    .sbtn:active {
+      transform: translateY(0);
+    }
+
+    .sbtn.stop {
+      background: linear-gradient(135deg, #ff4d4d, #c01010);
+      color: #fff;
+      box-shadow: 0 4px 15px rgba(255, 77, 77, 0.3);
+    }
+
+    /* Custom Select */
+    .sel {
+      width: 100%;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.3);
+      color: var(--text);
+      border: 1px solid var(--border);
+      font-size: 12px;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .sel:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    /* POV Viewport */
+    #camPov {
+      position: absolute;
+      bottom: 24px;
+      right: 24px;
+      width: 220px;
+      height: 165px;
+      border: 1px solid var(--gold);
+      border-radius: 12px;
+      overflow: hidden;
+      background: #000;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(255, 204, 0, 0.1);
+      z-index: 5;
+    }
+
+    .pov-label {
+      position: absolute;
+      bottom: 189px;
+      right: 24px;
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--gold);
+      background: rgba(8, 8, 16, 0.8);
+      padding: 4px 10px;
+      border-radius: 6px 6px 0 0;
+      border: 1px solid rgba(255, 204, 0, 0.3);
+      border-bottom: none;
+      z-index: 5;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    #trajCvs,
+    #trapCvs {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      margin-top: 4px;
+    }
+
+    .mu-bar-wrap {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 20px;
+      height: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .mu-bar {
+      height: 100%;
+      border-radius: 20px;
+      transition: width 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+    }
+
+    /* Pinhole Display */
+    .pinhole-display {
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="layout">
+
+    <!-- Header -->
+    <div class="hbar">
+      <div>
+        <div class="htitle">3-DOF RRR Occlusion-Avoidance Lamp<span class="badge">3D Simulator</span></div>
+        <div class="hsub">Closed-form IK · Analytical Jacobian · Occlusion Avoidance · DH Convention</div>
+      </div>
+    </div>
+
+    <div class="body-row">
+
+      <!-- 3D Canvas -->
+      <div id="cw">
+        <div class="hud" id="hud">
+          <div><b>θ₁</b> <span id="h1">—</span>&ensp;<b>θ₂</b> <span id="h2">—</span>&ensp;<b>θ₃</b> <span
+              id="h3">—</span></div>
+          <div><b>Head</b> <span id="hHead">—</span></div>
+          <div><b>μ (manip)</b> <span id="hMu">—</span></div>
+          <div><b>Status</b> <span id="hStat" class="ok">—</span></div>
+        </div>
+        <!-- Camera POV mini viewport -->
+        <div id="camPov"></div>
+        <div class="pov-label">📷 Camera POV</div>
+        <div class="cam-hint">🖱 Drag to orbit · Scroll to zoom · Right-drag to pan</div>
+      </div>
+
+      <!-- Control panel -->
+      <div class="panel">
+        <div class="tabs">
+          <button class="tab active" onclick="setTab('ik')">IK</button>
+          <button class="tab" onclick="setTab('jac')">Jacobian</button>
+          <button class="tab" onclick="setTab('sim')">Simulate</button>
+          <button class="tab" onclick="setTab('cam')">Camera</button>
+        </div>
+
+        <!-- ── IK Pane ── -->
+        <div class="pane on" id="pane-ik">
+          <div class="sec">Hand Target Position (Table Surface)</div>
+          <div class="ctrl"><label>x_target (m)</label><input type="range" id="xd" min="-0.15" max="0.85" value="0.28"
+              step="0.01"><span class="val" id="xdv">0.28</span></div>
+          <div class="ctrl"><label>y_target (m)</label><input type="range" id="yd" min="-0.30" max="0.30" value="0.14"
+              step="0.01"><span class="val" id="ydv">0.14</span></div>
+          <div class="ctrl"><label>Elbow config</label>
+            <select id="elbow" class="sel">
+              <option value="1">Elbow-up (+)</option>
+              <option value="-1">Elbow-down (−)</option>
+            </select>
+          </div>
+
+          <div class="alert" id="ikAlert">⚠ Target out of reach — |L₂−L₃| ≤ D ≤ L₂+L₃</div>
+          <div class="alert" id="limAlert">⚠ Joint limit violated — increase Δz offset</div>
+
+          <div id="ik-res">
+            <div class="sec">IK Solution q*</div>
+            <div class="cards" style="grid-template-columns:1fr 1fr 1fr">
+              <div class="card">
+                <div class="cl">θ₁ Yaw</div>
+                <div class="cv" id="ik-t1">—</div>
+              </div>
+              <div class="card">
+                <div class="cl">θ₂ Shoulder</div>
+                <div class="cv" id="ik-t2">—</div>
+              </div>
+              <div class="card">
+                <div class="cl">θ₃ Elbow</div>
+                <div class="cv" id="ik-t3">—</div>
+              </div>
+            </div>
+            <div class="cards">
+              <div class="card">
+                <div class="cl">FK Verify ‖e‖</div>
+                <div class="cv" id="ik-err">—</div>
+              </div>
+              <div class="card">
+                <div class="cl">Reach r (m)</div>
+                <div class="cv" id="ik-r">—</div>
+              </div>
+              <div class="card">
+                <div class="cl">Head z (m)</div>
+                <div class="cv" id="ik-z">—</div>
+              </div>
+              <div class="card">
+                <div class="cl">Manipulability</div>
+                <div class="cv" id="ik-mu">—</div>
+              </div>
+            </div>
+            <!-- Workspace constraints -->
+            <div class="sec">Joint Limits (Physical)</div>
+            <table class="dht">
+              <tr>
+                <th>Joint</th>
+                <th>Min</th>
+                <th>Max</th>
+                <th>Constraint</th>
+              </tr>
+              <tr>
+                <td>θ₁ Yaw</td>
+                <td>−170°</td>
+                <td>+170°</td>
+                <td style="text-align:left;font-size:10px">Cable wrap</td>
+              </tr>
+              <tr>
+                <td>θ₂ Shoulder</td>
+                <td>15°</td>
+                <td>115°</td>
+                <td style="text-align:left;font-size:10px">Above table</td>
+              </tr>
+              <tr>
+                <td>θ₃ Elbow</td>
+                <td>20°</td>
+                <td>145°</td>
+                <td style="text-align:left;font-size:10px">Arch fold</td>
+              </tr>
+            </table>
+          </div>
+        </div>
+
+        <!-- ── Jacobian Pane ── -->
+        <div class="pane" id="pane-jac">
+          <div class="sec">Analytical Jacobian J(q) — 3×3</div>
+          <div style="font-size:10px;color:var(--muted)">ṗ = J(q) q̇ &nbsp;·&nbsp; colors: <span
+              style="color:#40b870">pos</span> / <span style="color:#e05050">neg</span> / <span
+              style="color:var(--muted)">≈0</span></div>
+          <div class="jgrid">
+            <div></div>
+            <div class="jh">∂/∂θ₁</div>
+            <div class="jh">∂/∂θ₂</div>
+            <div class="jh">∂/∂θ₃</div>
+            <div class="jrow-lbl">ẋ</div>
+            <div class="jc" id="j11">—</div>
+            <div class="jc" id="j12">—</div>
+            <div class="jc" id="j13">—</div>
+            <div class="jrow-lbl">ẏ</div>
+            <div class="jc" id="j21">—</div>
+            <div class="jc" id="j22">—</div>
+            <div class="jc" id="j23">—</div>
+            <div class="jrow-lbl">ż</div>
+            <div class="jc" id="j31">—</div>
+            <div class="jc" id="j32">—</div>
+            <div class="jc" id="j33">—</div>
+          </div>
+
+          <div class="sec">Metrics</div>
+          <div class="cards">
+            <div class="card">
+              <div class="cl">det J</div>
+              <div class="cv" id="detJ">—</div>
+            </div>
+            <div class="card">
+              <div class="cl">Manipulability μ</div>
+              <div class="cv" id="jmu">—</div>
+            </div>
+            <div class="card">
+              <div class="cl">sin θ₃</div>
+              <div class="cv" id="sinT3">—</div>
+            </div>
+            <div class="card">
+              <div class="cl">Reach r</div>
+              <div class="cv" id="jreach">—</div>
+            </div>
+          </div>
+
+          <div class="sec">Manipulability Index</div>
+          <div class="mu-bar-wrap">
+            <div class="mu-bar" id="muBar" style="width:0%"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted)">
+            <span>Singular</span><span id="muLabel">μ = —</span><span>High</span>
+          </div>
+
+          <div id="singWarn" class="alert" style="display:none">⚠ Near singularity — sin θ₃ ≈ 0 (elbow extended/folded)
+          </div>
+          <div id="singWarn2" class="alert" style="display:none">⚠ Shoulder singularity — r ≈ 0 (arm vertical)</div>
+
+          <div class="sec">Use IK Sliders (drives Jacobian)</div>
+          <div class="ctrl"><label>x_target (m)</label><input type="range" id="jxd" min="-0.15" max="0.85" value="0.28"
+              step="0.01"><span class="val" id="jxdv">0.28</span></div>
+          <div class="ctrl"><label>y_target (m)</label><input type="range" id="jyd" min="-0.30" max="0.30" value="0.14"
+              step="0.01"><span class="val" id="jydv">0.14</span></div>
+        </div>
+
+        <!-- ── Simulate Pane ── -->
+        <div class="pane" id="pane-sim">
+          <div class="sec">Occlusion Avoidance Simulation</div>
+          <div class="info-box">
+            Hand traces oval on table.<br>
+            Lamp solves: <b style="color:var(--gold)">p* = p_hand + Δ</b><br>
+            <span style="opacity:.7">Trapezoidal velocity profile · Closed-form IK · ‖err‖ ≈ 10⁻¹⁶ m</span>
+          </div>
+          <div class="ctrl"><label>Speed</label><input type="range" id="spd" min="0.2" max="4" value="1"
+              step="0.1"><span class="val" id="spdv">1.0×</span></div>
+          <div class="ctrl"><label>Oval radius</label><input type="range" id="hR" min="0.03" max="0.18" value="0.08"
+              step="0.01"><span class="val" id="hRv">0.08 m</span></div>
+
+          <div class="sec">Trapezoidal Velocity Profile (Eq. 74)</div>
+          <div class="info-box" style="font-size:10px;margin-bottom:2px">
+            s(t): accel → cruise → decel · avoids abrupt velocity changes for hardware safety
+          </div>
+          <div class="ctrl"><label>v<sub>max</sub> (rad/s)</label><input type="range" id="vmax" min="0.3" max="3.0"
+              value="1.2" step="0.1"><span class="val" id="vmaxv">1.20</span></div>
+          <div class="ctrl"><label>a<sub>max</sub> (rad/s²)</label><input type="range" id="amax" min="0.5" max="6.0"
+              value="2.0" step="0.25"><span class="val" id="amaxv">2.00</span></div>
+          <canvas id="trapCvs"></canvas>
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted)">
+            <span>t=0</span><span id="trapLabel">Trap profile — accel/cruise/decel</span><span>t=T</span>
+          </div>
+
+          <button class="sbtn" id="sbtn" onclick="toggleSim()">▶ Play Simulation</button>
+          <div id="simStats" style="display:none">
+            <div class="cards">
+              <div class="card">
+                <div class="cl">Frame</div>
+                <div class="cv" id="simF">—</div>
+              </div>
+              <div class="card">
+                <div class="cl">IK Error</div>
+                <div class="cv ok" id="simE">—</div>
+              </div>
+              <div class="card">
+                <div class="cl">θ₂ (°)</div>
+                <div class="cv" id="simT2">—</div>
+              </div>
+              <div class="card">
+                <div class="cl">μ (manip)</div>
+                <div class="cv" id="simMu">—</div>
+              </div>
+            </div>
+            <div class="cards" style="margin-top:4px">
+              <div class="card">
+                <div class="cl">Trap phase</div>
+                <div class="cv" id="simPhase">—</div>
+              </div>
+              <div class="card">
+                <div class="cl">s(t)</div>
+                <div class="cv" id="simS">—</div>
+              </div>
+              <div class="card">
+                <div class="cl">ṡ (vel)</div>
+                <div class="cv" id="simSdot">—</div>
+              </div>
+              <div class="card">
+                <div class="cl">s̈ (accel)</div>
+                <div class="cv" id="simSddot">—</div>
+              </div>
+            </div>
+            <!-- Mini trajectory plot -->
+            <div class="sec" style="margin-top:4px">Top-view Trajectory</div>
+            <canvas id="trajCvs"></canvas>
+          </div>
+        </div>
+
+        <!-- ── Camera Pane ── -->
+        <div class="pane" id="pane-cam">
+          <div class="sec">Pinhole Camera Model (Eq. 63–68)</div>
+          <div class="info-box" style="font-size:10px">
+            Camera estimates 3D hand position from 2D pixel coordinates + depth.<br>
+            <b style="color:var(--gold)">p_robot = R·p_cam + t</b> → feeds IK solver
+          </div>
+
+          <div class="sec">Intrinsic Parameters</div>
+          <div class="ctrl"><label>f<sub>x</sub> (px)</label><input type="range" id="cfx" min="300" max="900"
+              value="525" step="5"><span class="val" id="cfxv">525</span></div>
+          <div class="ctrl"><label>f<sub>y</sub> (px)</label><input type="range" id="cfy" min="300" max="900"
+              value="525" step="5"><span class="val" id="cfyv">525</span></div>
+          <div class="ctrl"><label>c<sub>x</sub> (px)</label><input type="range" id="ccx" min="200" max="700"
+              value="320" step="5"><span class="val" id="ccxv">320</span></div>
+          <div class="ctrl"><label>c<sub>y</sub> (px)</label><input type="range" id="ccy" min="100" max="500"
+              value="240" step="5"><span class="val" id="ccyv">240</span></div>
+
+          <div class="sec">Simulated Detection (pixel + depth)</div>
+          <div class="ctrl"><label>u (px)</label><input type="range" id="cu" min="0" max="640" value="320"
+              step="1"><span class="val" id="cuv">320</span></div>
+          <div class="ctrl"><label>v (px)</label><input type="range" id="cv_" min="0" max="480" value="240"
+              step="1"><span class="val" id="cvv">240</span></div>
+          <div class="ctrl"><label>Z<sub>w</sub> (m)</label><input type="range" id="czw" min="0.30" max="1.20"
+              value="0.65" step="0.01"><span class="val" id="czwv">0.65</span></div>
+
+          <div class="sec">Extrinsic: Camera→Robot Transform</div>
+          <div class="ctrl"><label>t<sub>x</sub> (m)</label><input type="range" id="ctx" min="-0.5" max="0.5"
+              value="0.0" step="0.01"><span class="val" id="ctxv"> 0.00</span></div>
+          <div class="ctrl"><label>t<sub>y</sub> (m)</label><input type="range" id="cty" min="0.0" max="1.0"
+              value="0.50" step="0.01"><span class="val" id="ctyv"> 0.50</span></div>
+          <div class="ctrl"><label>t<sub>z</sub> (m)</label><input type="range" id="ctz" min="-0.5" max="0.5"
+              value="0.30" step="0.01"><span class="val" id="ctzv"> 0.30</span></div>
+
+          <div class="sec">3D Reconstruction (Eq. 64–67)</div>
+          <div class="pinhole-display" id="camOut">
+            <div class="ph-row"><span class="ph-lbl">X_w (cam)</span><span class="ph-val" id="camXw">—</span></div>
+            <div class="ph-row"><span class="ph-lbl">Y_w (cam)</span><span class="ph-val" id="camYw">—</span></div>
+            <div class="ph-row"><span class="ph-lbl">Z_w (cam)</span><span class="ph-val" id="camZw">—</span></div>
+            <div style="border-top:1px solid var(--border);margin:4px 0"></div>
+            <div class="ph-row"><span class="ph-lbl">x_robot</span><span class="ph-val" id="camRx">—</span></div>
+            <div class="ph-row"><span class="ph-lbl">y_robot</span><span class="ph-val" id="camRy">—</span></div>
+            <div class="ph-row"><span class="ph-lbl">z_robot</span><span class="ph-val" id="camRz">—</span></div>
+            <div style="border-top:1px solid var(--border);margin:4px 0"></div>
+            <div class="ph-row"><span class="ph-lbl">IK from camera</span><span class="ph-val" id="camIK"
+                style="color:var(--grn)">—</span></div>
+          </div>
+          <button class="sbtn" id="camApplyBtn" onclick="applyCameraIK()"
+            style="background:linear-gradient(135deg,#003a6a,#0088cc);color:#fff">
+            📷 Apply Camera IK to Scene
+          </button>
+          <div class="alert" id="camAlert">⚠ Reconstructed point out of robot reach</div>
+        </div>
+
+        <div class="div"></div>
+
+        <!-- Offset Δ (always visible) -->
+        <div style="padding:12px 14px;display:flex;flex-direction:column;gap:9px">
+          <div class="sec">Occlusion Offset Δ = p* − p_hand</div>
+          <div class="ctrl"><label>Δx (m)</label><input type="range" id="dx" min="-0.2" max="0.1" value="-0.04"
+              step="0.01"><span class="val" id="dxv">-0.04</span></div>
+          <div class="ctrl"><label>Δy (m)</label><input type="range" id="dy" min="-0.2" max="0.2" value="0.0"
+              step="0.01"><span class="val" id="dyv"> 0.00</span></div>
+          <div class="ctrl"><label>Δz (m)</label><input type="range" id="dz" min="0.20" max="0.55" value="0.45"
+              step="0.01"><span class="val" id="dzv"> 0.45</span></div>
+          <div style="font-size:10px;color:var(--muted)">↑ Δz ≥ 0.30 m recommended — keeps arm arched above table</div>
+        </div>
+
+        <div class="div"></div>
+
+        <!-- End-effector readout -->
+        <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">
+          <div class="sec">End-Effector Position (FK)</div>
+          <div class="cards">
+            <div class="card">
+              <div class="cl">x (m)</div>
+              <div class="cv" id="ox">—</div>
+            </div>
+            <div class="card">
+              <div class="cl">y (m)</div>
+              <div class="cv" id="oy">—</div>
+            </div>
+            <div class="card">
+              <div class="cl">z (m)</div>
+              <div class="cv" id="oz">—</div>
+            </div>
+            <div class="card">
+              <div class="cl">r (m)</div>
+              <div class="cv" id="or_">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="div"></div>
+
+        <!-- DH table -->
+        <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">
+          <div class="sec">Denavit–Hartenberg Parameters</div>
+          <table class="dht">
+            <tr>
+              <th>i</th>
+              <th>aᵢ</th>
+              <th>αᵢ</th>
+              <th>dᵢ</th>
+              <th>θᵢ</th>
+            </tr>
+            <tr>
+              <td>1</td>
+              <td>0</td>
+              <td>π/2</td>
+              <td>L₁</td>
+              <td>θ₁★</td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td>L₂</td>
+              <td>0</td>
+              <td>0</td>
+              <td>θ₂★</td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td>L₃</td>
+              <td>0</td>
+              <td>0</td>
+              <td>θ₃★</td>
+            </tr>
+          </table>
+          <div style="font-size:10px;color:var(--muted)">L₁=0.15 m · L₂=0.30 m · L₃=0.24 m · (★ variable)</div>
+        </div>
+        <div class="spacer"></div>
+      </div>
+    </div>
+  </div>
+
+  <script
+    type="importmap">{"imports":{"three":"https://unpkg.com/three@0.158.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.158.0/examples/jsm/"}}</script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    /* ═══════════════════ Constants & helpers ═══════════════════ */
+    const L1 = 0.15, L2 = 0.30, L3 = 0.24;
+    const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+    const DEG = v => v * Math.PI / 180, RAD = v => v * 180 / Math.PI;
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const T2MIN = DEG(15), T2MAX = DEG(115), T3MIN = DEG(20), T3MAX = DEG(145);
+
+    /* ═══════════════════ Scene setup ═══════════════════ */
+    const wrap = document.getElementById('cw');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x070710);
+    scene.fog = new THREE.Fog(0x070710, 2.5, 5.0);
+
+    const camera = new THREE.PerspectiveCamera(44, wrap.clientWidth / wrap.clientHeight, 0.01, 10);
+    camera.position.set(1.0, 0.95, 1.0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.3;
+    wrap.insertBefore(renderer.domElement, wrap.firstChild);
+
+    // Add simple procedural environment map (Studio look)
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    pmrem.compileEquirectangularShader();
+    const envScene = new THREE.Scene();
+    const skyBox = new THREE.Mesh(new THREE.BoxGeometry(100, 100, 100), new THREE.MeshBasicMaterial({ color: 0x050510, side: THREE.BackSide }));
+    envScene.add(skyBox);
+    const envLight = new THREE.RectAreaLight(0xffffff, 5, 10, 10);
+    envLight.position.set(5, 10, 5); envLight.lookAt(0, 0, 0); envScene.add(envLight);
+    const envTex = pmrem.fromScene(envScene).texture;
+    scene.environment = envTex;
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0.25, 0.38, 0);
+    controls.enableDamping = true; controls.dampingFactor = 0.07;
+    controls.minDistance = 0.2; controls.maxDistance = 4;
+    camera.lookAt(controls.target);
+
+    /* ═══════════════════ POV Camera (Webots-style) ═══════════════════ */
+    const povWrap = document.getElementById('camPov');
+    const povRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    povRenderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+    povRenderer.shadowMap.enabled = true;
+    povRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+    povRenderer.toneMappingExposure = 1.1;
+    povRenderer.setSize(200, 150);
+    povWrap.appendChild(povRenderer.domElement);
+
+    // POV camera — positioned at camera mount point, looking at table
+    const povCamera = new THREE.PerspectiveCamera(55, 200 / 150, 0.01, 10);
+    // Default: mounted above-behind robot, looking down at table
+    povCamera.position.set(0.0, 0.50, 0.30);
+    povCamera.lookAt(0.35, 0.0, 0.0);
+
+    // POV frustum lines (shows what camera sees)
+    const povFrustumMat = new THREE.LineBasicMaterial({ color: 0x20C8FF, transparent: true, opacity: 0.55 });
+    let povFrustumLines = null;
+
+    function updatePovCamera(tx, ty, tz) {
+      // Camera extrinsic — robot frame uses Y-up, camera mounted above table
+      // tx,ty,tz = translation from robot base (from Camera tab sliders)
+      povCamera.position.set(tx, ty, tz);
+      povCamera.lookAt(0.35, 0.02, 0.0);
+      povCamera.updateMatrixWorld();
+    }
+    // initial
+    updatePovCamera(0.0, 0.50, 0.30);
+
+    /* ═══════════════════ Lighting ═══════════════════ */
+    // 1. Soft ambient (enough to see everything)
+    scene.add(new THREE.AmbientLight(0x6070c0, 0.90));
+
+    // 2. Main directional (sun from top-right)
+    const sun = new THREE.DirectionalLight(0xffffff, 1.20);
+    sun.position.set(2.0, 3.5, 1.8); sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004;
+    sun.shadow.camera.near = 0.1; sun.shadow.camera.far = 10;
+    sun.shadow.camera.top = sun.shadow.camera.right = 2;
+    sun.shadow.camera.bottom = sun.shadow.camera.left = -2;
+    scene.add(sun);
+
+    // 3. Warm fill from left (makes table visible)
+    const fill = new THREE.DirectionalLight(0xffa060, 0.55);
+    fill.position.set(-2, 1.5, -0.5); scene.add(fill);
+
+    // 4. Cool back/rim light (to separate lamp from dark bg)
+    const rim = new THREE.DirectionalLight(0x4080ff, 0.35);
+    rim.position.set(-0.5, 0.5, -2); scene.add(rim);
+
+    // 5. Lamp head spot (casts real shadows on table)
+    const spot = new THREE.SpotLight(0xFFF8D0, 3.5);
+    spot.angle = 0.40; spot.penumbra = 0.40; spot.decay = 1.4; spot.distance = 2.0;
+    spot.castShadow = true; spot.shadow.mapSize.set(1024, 1024); spot.shadow.bias = -0.001;
+    scene.add(spot);
+    const spotTgt = new THREE.Object3D(); scene.add(spotTgt);
+    spot.target = spotTgt;
+
+    // 6. Point light near lamp head (warm ambient bloom)
+    const lPt = new THREE.PointLight(0xFFE890, 1.5, 1.2);
+    scene.add(lPt);
+
+    /* ═══════════════════ Materials ═══════════════════ */
+    const mBody = new THREE.MeshPhysicalMaterial({
+      color: 0x8C0A0A,
+      roughness: 0.15,
+      metalness: 0.4,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.05,
+      envMapIntensity: 1.2
+    });
+    const mJoint = new THREE.MeshPhysicalMaterial({
+      color: 0xC8A200,
+      roughness: 0.05,
+      metalness: 0.95,
+      clearcoat: 1.0,
+      envMapIntensity: 2.0
+    });
+    const mShOut = new THREE.MeshStandardMaterial({ color: 0x202028, roughness: 0.5, metalness: 0.1, side: THREE.FrontSide });
+    const mShIn = new THREE.MeshStandardMaterial({ color: 0xF8F0A0, roughness: 0.6, emissive: 0x604820, emissiveIntensity: 0.5, side: THREE.BackSide });
+    const mCone = new THREE.MeshBasicMaterial({ color: 0xFFF870, transparent: true, opacity: 0.05, side: THREE.DoubleSide, depthWrite: false });
+    const mBeam = new THREE.LineDashedMaterial({ color: 0xE8C020, dashSize: 0.02, gapSize: 0.01 });
+    const mTgt = new THREE.MeshPhysicalMaterial({
+      color: 0x00e5ff,
+      emissive: 0x0088ff,
+      emissiveIntensity: 1.0,
+      roughness: 0.1,
+      metalness: 0.8,
+      clearcoat: 1.0
+    });
+    const mTrail = new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.6, depthWrite: false });
+
+    /* ═══════════════════ Floor & Table ═══════════════════ */
+    // Real floor
+    const floorG = new THREE.PlaneGeometry(5, 5); floorG.rotateX(-Math.PI / 2);
+    const floor = new THREE.Mesh(floorG, new THREE.MeshStandardMaterial({ color: 0x0b0b18, roughness: 0.98 }));
+    floor.position.y = -0.76; floor.receiveShadow = true; scene.add(floor);
+    const floorGrid = new THREE.GridHelper(4, 32, 0x18182a, 0x10101e);
+    floorGrid.position.y = -0.756; scene.add(floorGrid);
+
+    // Table top
+    const tblTopMat = new THREE.MeshStandardMaterial({ color: 0x5A3418, roughness: 0.68, metalness: 0.05 });
+    const tblTop = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.04, 0.75), tblTopMat);
+    tblTop.position.set(0.35, -0.02, 0); tblTop.castShadow = true; tblTop.receiveShadow = true;
+    scene.add(tblTop);
+    // Gold trim strip
+    const trimM = new THREE.MeshStandardMaterial({ color: 0xA07820, roughness: 0.25, metalness: 0.60 });
+    const trimMesh = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.005, 0.005), trimM);
+    trimMesh.position.set(0.35, -0.0025, 0.375);
+    scene.add(trimMesh);
+    // Table legs
+    const legMat = new THREE.MeshStandardMaterial({ color: 0x381E0C, roughness: 0.80, metalness: 0.04 });
+    [[-0.14, 0.32], [-0.14, -0.32], [0.84, 0.32], [0.84, -0.32]].forEach(([x, z]) => {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.72, 0.05), legMat);
+      leg.position.set(x, -0.40, z); leg.castShadow = leg.receiveShadow = true; scene.add(leg);
+    });
+    // Table surface grid
+    const tGrid = new THREE.GridHelper(1.0, 20, 0x7A5030, 0x5A3818);
+    tGrid.position.set(0.35, 0.001, 0); scene.add(tGrid);
+    const tBoundMat = new THREE.LineBasicMaterial({ color: 0xFF6020, transparent: true, opacity: 0.5 });
+    const tBoundGeo = new THREE.BufferGeometry().setFromPoints([
+      V3(-0.15, 0.003, -0.30), V3(0.85, 0.003, -0.30),
+      V3(0.85, 0.003, 0.30), V3(-0.15, 0.003, 0.30),
+      V3(-0.15, 0.003, -0.30)
+    ]);
+    scene.add(new THREE.Line(tBoundGeo, tBoundMat));
+
+    // Reachability visualization (Workspace)
+    const reachG = new THREE.SphereGeometry(L2 + L3, 64, 32, 0, Math.PI * 2, 0, Math.PI / 2);
+    const reachM = new THREE.MeshStandardMaterial({
+      color: 0x00e5ff,
+      transparent: true,
+      opacity: 0.03,
+      side: THREE.BackSide,
+      depthWrite: false
+    });
+    const reachDome = new THREE.Mesh(reachG, reachM);
+    reachDome.position.y = L1;
+    scene.add(reachDome);
+    // Outline for reachability
+    const reachEdge = new THREE.LineSegments(
+      new THREE.EdgesGeometry(reachG),
+      new THREE.LineBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.1 })
+    );
+    reachDome.add(reachEdge);
+
+    /* ═══════════════════ Lamp geometry (pre-allocated) ═══════════════════ */
+    const lamp = new THREE.Group(); scene.add(lamp);
+
+    // Base
+    const mBase = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.093, 0.012, 32), mBody);
+    mBase.position.y = 0.006; mBase.castShadow = mBase.receiveShadow = true; lamp.add(mBase);
+    // Gold accent ring
+    const mAccent = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.007, 32), mJoint);
+    mAccent.position.set(0, 0.013, 0);
+    lamp.add(mAccent);
+    // Column
+    const mCol = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.026, L1, 16), mBody);
+    mCol.position.y = L1 / 2; mCol.castShadow = true; lamp.add(mCol);
+    // Shoulder joint motor
+    const mSh = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.040, 24), mJoint);
+    mSh.castShadow = true; lamp.add(mSh);
+    // Lower arm (offset)
+    const mLow = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, L2, 16), mBody);
+    mLow.castShadow = true; lamp.add(mLow);
+    // Elbow motor
+    const mEl = new THREE.Mesh(new THREE.CylinderGeometry(0.030, 0.030, 0.035, 24), mJoint);
+    mEl.castShadow = true; lamp.add(mEl);
+    // Upper arm (offset)
+    const mUp = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, L3, 16), mBody);
+    mUp.castShadow = true; lamp.add(mUp);
+    // Wrist motor / bracket
+    const mWrist = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.032, 24), mJoint);
+    mWrist.castShadow = true; lamp.add(mWrist);
+    // Shade outer + inner
+    const mSO = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.048, 0.062, 24), mShOut);
+    mSO.castShadow = true; lamp.add(mSO);
+    const mSI = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.048, 0.062, 24), mShIn);
+    lamp.add(mSI);
+    // Bulb (emissive sphere)
+    const mBulb = new THREE.Mesh(new THREE.SphereGeometry(0.010, 12, 12),
+      new THREE.MeshStandardMaterial({ color: 0xFFFAD0, emissive: 0xFFF8A0, emissiveIntensity: 2.0, roughness: 0.1 }));
+    lamp.add(mBulb);
+    // Light cone (unit, scaled per frame)
+    const mLC = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 32, 1, true), mCone);
+    mLC.renderOrder = 1; lamp.add(mLC);
+
+    /* ═══════════════════ Target & glow ═══════════════════ */
+    const mTgtS = new THREE.Mesh(new THREE.SphereGeometry(0.018, 20, 20), mTgt);
+    mTgtS.castShadow = true; scene.add(mTgtS);
+    const glowRings = [0.09, 0.055, 0.028].map((r, i) => {
+      const m = new THREE.Mesh(new THREE.CircleGeometry(r, 36),
+        new THREE.MeshBasicMaterial({
+          color: 0xFFF870, transparent: true,
+          opacity: [0.10, 0.16, 0.26][i], side: THREE.DoubleSide, depthWrite: false
+        }));
+      m.rotation.x = -Math.PI / 2; m.position.y = 0.001; m.renderOrder = 0;
+      scene.add(m); return m;
+    });
+
+    // Beam line
+    let beamLine = null;
+
+    // Trail dots (simulation trajectory)
+    const TRAIL_N = 60;
+    const trailMeshes = Array.from({ length: TRAIL_N }, () => {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(0.006, 6, 6), mTrail.clone());
+      m.visible = false; scene.add(m); return m;
+    });
+    let trailBuf = [], trailIdx = 0;
+
+    /* ═══════════════════ Cylinder helper ═══════════════════ */
+    function alignCyl(mesh, P1, P2) {
+      const d = P2.clone().sub(P1), l = d.length();
+      if (l < 1e-4) return;
+      mesh.position.copy(P1).addScaledVector(d.normalize(), l / 2);
+      mesh.quaternion.setFromUnitVectors(V3(0, 1, 0), d.normalize());
+    }
+
+    /* ═══════════════════ Kinematics ═══════════════════ */
+    function fkMat(t1, t2, t3) {
+      const c1 = Math.cos(t1), s1 = Math.sin(t1), c2 = Math.cos(t2), s2 = Math.sin(t2);
+      const c23 = Math.cos(t2 + t3), s23 = Math.sin(t2 + t3);
+      const r = L2 * c2 + L3 * c23;
+      return {
+        x: r * c1, y: r * s1, z: L1 + L2 * s2 + L3 * s23, r,
+        P0: V3(0, 0, 0), P1: V3(0, L1, 0),
+        P2: V3(L2 * c1 * c2, L1 + L2 * s2, -L2 * s1 * c2),
+        P3: V3(r * c1, L1 + L2 * s2 + L3 * s23, -r * s1)
+      };
+    }
+    function ikMat(xd, yd, zd, eSign = 1) {
+      const t1 = Math.atan2(yd, xd), r = Math.hypot(xd, yd), zp = zd - L1;
+      const D2 = r * r + zp * zp, C3 = (D2 - L2 * L2 - L3 * L3) / (2 * L2 * L3);
+      if (Math.abs(C3) > 1.0001) return null;
+      const C3c = clamp(C3, -1, 1), s3 = eSign * Math.sqrt(1 - C3c * C3c);
+      const t3 = Math.atan2(s3, C3c);
+      const t2 = Math.atan2(zp, r) - Math.atan2(L3 * Math.sin(t3), L2 + L3 * Math.cos(t3));
+      return { t1, t2, t3 };
+    }
+    function jacMat(t1, t2, t3) {
+      const c1 = Math.cos(t1), s1 = Math.sin(t1), s2 = Math.sin(t2), c2 = Math.cos(t2);
+      const s23 = Math.sin(t2 + t3), c23 = Math.cos(t2 + t3), R = L2 * c2 + L3 * c23;
+      return [[-s1 * R, -c1 * (L2 * s2 + L3 * s23), -L3 * c1 * s23],
+      [c1 * R, -s1 * (L2 * s2 + L3 * s23), -L3 * s1 * s23],
+      [0, L2 * c2 + L3 * c23, L3 * c23]];
+    }
+    function det3(m) {
+      return m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+        - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+        + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+    }
+
+    /* ═══════════════════ Scene updater ═══════════════════ */
+    function updateScene(t1, t2, t3, pTgt3) {
+      const f = fkMat(t1, t2, t3);
+      const { P1, P2, P3 } = f;
+
+      const sideAx = new THREE.Vector3(-Math.sin(t1), 0, -Math.cos(t1));
+      const offDist = 0.06;
+      const offV = sideAx.clone().multiplyScalar(offDist);
+
+      // Shoulder joint motor
+      mSh.position.copy(P1).add(offV);
+      mSh.quaternion.setFromUnitVectors(V3(0, 1, 0), sideAx);
+
+      // Lower arm (offset)
+      alignCyl(mLow, P1.clone().add(offV), P2.clone().add(offV));
+
+      // Elbow motor
+      mEl.position.copy(P2).add(offV);
+      mEl.quaternion.setFromUnitVectors(V3(0, 1, 0), sideAx);
+
+      // Upper arm (offset)
+      alignCyl(mUp, P2.clone().add(offV), P3.clone().add(offV));
+
+      // Wrist motor / bracket
+      mWrist.position.copy(P3).add(offV);
+      mWrist.quaternion.setFromUnitVectors(V3(0, 1, 0), sideAx);
+
+      // Shade / cone direction
+      const shDir = pTgt3 ? pTgt3.clone().sub(P3).normalize() : V3(0, -1, 0);
+      mSO.position.copy(P3).addScaledVector(shDir, 0.062 / 2);
+      mSI.position.copy(P3).addScaledVector(shDir, 0.062 / 2);
+      mSO.quaternion.setFromUnitVectors(V3(0, 1, 0), shDir.clone().negate());
+      mSI.quaternion.setFromUnitVectors(V3(0, 1, 0), shDir.clone().negate());
+
+      // Bulb
+      mBulb.position.copy(P3).addScaledVector(shDir, 0.008);
+
+      // Light cone
+      const cLen = pTgt3 ? Math.min(P3.distanceTo(pTgt3) * 1.1, 0.55) : 0.50;
+      const cR = cLen * 0.27;
+      mLC.position.copy(P3).addScaledVector(shDir, cLen / 2);
+      mLC.quaternion.setFromUnitVectors(V3(0, 1, 0), shDir.clone().negate());
+      mLC.scale.set(cR, cLen, cR);
+
+      // Spot & point lights
+      spot.position.copy(P3);
+      spotTgt.position.copy(pTgt3 || V3(P3.x, 0, P3.z));
+      lPt.position.copy(P3).addScaledVector(shDir, 0.06);
+
+      // Target
+      if (pTgt3) {
+        mTgtS.visible = true; mTgtS.position.copy(pTgt3);
+        glowRings.forEach(r => { r.position.x = pTgt3.x; r.position.z = pTgt3.z; r.visible = true; });
+        if (beamLine) { scene.remove(beamLine); beamLine.geometry.dispose(); }
+        const bg = new THREE.BufferGeometry().setFromPoints([P3.clone(), pTgt3.clone()]);
+        beamLine = new THREE.Line(bg, mBeam); beamLine.computeLineDistances(); scene.add(beamLine);
+      } else {
+        mTgtS.visible = false; glowRings.forEach(r => r.visible = false);
+        if (beamLine) { scene.remove(beamLine); beamLine.geometry.dispose(); beamLine = null; }
+      }
+
+      // HUD
+      document.getElementById('h1').textContent = RAD(t1).toFixed(1) + '°';
+      document.getElementById('h2').textContent = RAD(t2).toFixed(1) + '°';
+      document.getElementById('h3').textContent = RAD(t3).toFixed(1) + '°';
+      document.getElementById('hHead').textContent = `(${f.x.toFixed(3)}, ${f.y.toFixed(3)}, ${f.z.toFixed(3)}) m`;
+      const J = jacMat(t1, t2, t3);
+      const mu = Math.abs(det3(J));
+      document.getElementById('hMu').textContent = mu.toFixed(5);
+
+      // Data cards
+      document.getElementById('ox').textContent = f.x.toFixed(4) + ' m';
+      document.getElementById('oy').textContent = f.y.toFixed(4) + ' m';
+      document.getElementById('oz').textContent = f.z.toFixed(4) + ' m';
+      document.getElementById('or_').textContent = f.r.toFixed(4) + ' m';
+
+      updateJacobian(t1, t2, t3, f, J, mu);
+    }
+
+    /* ═══════════════════ Jacobian display ═══════════════════ */
+    function updateJacobian(t1, t2, t3, f, J, mu) {
+      const ids = [['j11', 'j12', 'j13'], ['j21', 'j22', 'j23'], ['j31', 'j32', 'j33']];
+      const maxVal = Math.max(...J.flat().map(Math.abs), 1e-9);
+      for (let i = 0; i < 3; i++)for (let j = 0; j < 3; j++) {
+        const el = document.getElementById(ids[i][j]);
+        const v = J[i][j], norm = v / maxVal;
+        el.textContent = v.toFixed(3);
+        if (Math.abs(v) < 0.001) { el.style.background = 'rgba(80,80,100,0.3)'; el.style.color = '#555580'; }
+        else if (norm > 0) { el.style.background = `rgba(32,${Math.round(80 + norm * 120)},60,0.25)`; el.style.color = `rgb(50,${Math.round(160 + norm * 95)},80)`; }
+        else { el.style.background = `rgba(${Math.round(80 + (-norm) * 120)},30,30,0.25)`; el.style.color = `rgb(${Math.round(160 + (-norm) * 95)},50,50)`; }
+      }
+      const d = det3(J);
+      document.getElementById('detJ').textContent = d.toFixed(4);
+      document.getElementById('jmu').textContent = mu.toFixed(5);
+      document.getElementById('sinT3').textContent = Math.sin(t3).toFixed(4);
+      document.getElementById('jreach').textContent = f.r.toFixed(4) + ' m';
+      // Bar (max realistic μ for this arm ≈ 0.04)
+      const pct = Math.min(mu / 0.04 * 100, 100);
+      document.getElementById('muBar').style.width = pct + '%';
+      const ramp = Math.round(pct * 2.55);
+      document.getElementById('muBar').style.background = `rgb(${255 - ramp},${ramp},60)`;
+      document.getElementById('muLabel').textContent = 'μ = ' + mu.toFixed(5);
+      // Singularity warnings
+      document.getElementById('singWarn').style.display = Math.abs(Math.sin(t3)) < 0.10 ? 'block' : 'none';
+      document.getElementById('singWarn2').style.display = Math.abs(f.r) < 0.04 ? 'block' : 'none';
+    }
+
+    /* ═══════════════════ Main update ═══════════════════ */
+    function update() {
+      const tab = window._tab || 'ik';
+      const dx = +document.getElementById('dx').value,
+        dy = +document.getElementById('dy').value,
+        dz = +document.getElementById('dz').value;
+      document.getElementById('dxv').textContent = dx.toFixed(2);
+      document.getElementById('dyv').textContent = dy.toFixed(2);
+      document.getElementById('dzv').textContent = dz.toFixed(2);
+
+      let xd, yd;
+      if (tab === 'jac') {
+        xd = +document.getElementById('jxd').value;
+        yd = +document.getElementById('jyd').value;
+        document.getElementById('jxdv').textContent = xd.toFixed(2);
+        document.getElementById('jydv').textContent = yd.toFixed(2);
+      } else {
+        xd = +document.getElementById('xd').value;
+        yd = +document.getElementById('yd').value;
+        document.getElementById('xdv').textContent = xd.toFixed(2);
+        document.getElementById('ydv').textContent = yd.toFixed(2);
+      }
+
+      const eSign = (tab === 'ik') ? +document.getElementById('elbow').value : 1;
+      const zhand = 0.025;
+      const pdx = xd + dx, pdy = yd + dy, pdz = zhand + dz;
+      const sol = ikMat(pdx, pdy, pdz, eSign);
+
+      // Alerts
+      document.getElementById('ikAlert').classList.toggle('on', !sol && tab === 'ik');
+      if (!sol) {
+        document.getElementById('hStat').textContent = 'Unreachable';
+        document.getElementById('hStat').className = 'bad';
+        return;
+      }
+
+      // Joint limit check
+      const limOk = sol.t2 >= T2MIN - 0.01 && sol.t2 <= T2MAX + 0.01 && sol.t3 >= T3MIN - 0.01 && sol.t3 <= T3MAX + 0.01;
+      const t1 = sol.t1;
+      const t2 = clamp(sol.t2, T2MIN, T2MAX);
+      const t3 = clamp(sol.t3, T3MIN, T3MAX);
+      document.getElementById('limAlert').classList.toggle('on', !limOk && tab === 'ik');
+
+      document.getElementById('hStat').textContent = limOk ? '✓ Valid' : '⚠ Limit';
+      document.getElementById('hStat').className = limOk ? 'ok' : 'bad';
+
+      // FK verify
+      const fv = fkMat(t1, t2, t3);
+      const err = Math.hypot(fv.x - pdx, fv.y - pdy, fv.z - pdz);
+      const J = jacMat(t1, t2, t3);
+      const mu = Math.abs(det3(J));
+
+      if (tab === 'ik') {
+        document.getElementById('ik-t1').textContent = RAD(t1).toFixed(1) + '°';
+        document.getElementById('ik-t2').textContent = RAD(sol.t2).toFixed(1) + (limOk ? '' : '⚠') + '°';
+        document.getElementById('ik-t3').textContent = RAD(sol.t3).toFixed(1) + (limOk ? '' : '⚠') + '°';
+        document.getElementById('ik-err').textContent = err.toExponential(2) + ' m';
+        document.getElementById('ik-r').textContent = fv.r.toFixed(4) + ' m';
+        document.getElementById('ik-z').textContent = fv.z.toFixed(4) + ' m';
+        document.getElementById('ik-mu').textContent = mu.toFixed(5);
+      }
+
+      const pTgt3 = V3(xd, zhand, -yd);
+      updateScene(t1, t2, t3, pTgt3);
+    }
+    window.doUpdate = update;
+
+    /* ═══════════════════ Trapezoidal velocity profile (Eq. 74) ═══════════════════ */
+    function trapProfile(t, T, vmax, amax) {
+      // Returns {s, sdot, sddot, phase}
+      if (T <= 0) return { s: 1, sdot: 0, sddot: 0, phase: 'done' };
+      const t1 = vmax / amax;
+      // Check if triangular (can't reach vmax in time)
+      const t1_tri = Math.sqrt(T / amax);
+      const isTriangle = (2 * t1 > T);
+      if (isTriangle) {
+        const t1t = Math.sqrt(T / amax);
+        const t2t = T - t1t;
+        if (t < t1t) {
+          const s = 0.5 * amax * t * t / (T);
+          return { s: clamp(s, 0, 1), sdot: amax * t, sddot: amax, phase: 'accel▲' };
+        } else {
+          const s = 1 - 0.5 * amax * (T - t) * (T - t) / (T);
+          return { s: clamp(s, 0, 1), sdot: amax * (T - t), sddot: -amax, phase: 'decel▼' };
+        }
+      }
+      const t2 = T - t1;
+      const sAccelEnd = 0.5 * amax * t1 * t1;
+      const sDecelStart = 1 - sAccelEnd;
+      if (t <= 0) return { s: 0, sdot: 0, sddot: 0, phase: 'wait' };
+      if (t >= T) return { s: 1, sdot: 0, sddot: 0, phase: 'done' };
+      if (t < t1) {
+        const s = sAccelEnd * (t / t1) * (t / t1);
+        return { s, sdot: amax * t, sddot: amax, phase: 'accel▲' };
+      } else if (t <= t2) {
+        const s = sAccelEnd + vmax * (t - t1);
+        return { s: clamp(s, 0, 1), sdot: vmax, sddot: 0, phase: 'cruise→' };
+      } else {
+        const dt = t - t2;
+        const s = sDecelStart + vmax * dt - 0.5 * amax * dt * dt;
+        return { s: clamp(s, 0, 1), sdot: vmax - amax * dt, sddot: -amax, phase: 'decel▼' };
+      }
+    }
+
+    function drawTrapProfile() {
+      const cvs = document.getElementById('trapCvs');
+      if (!cvs) return;
+      const w = cvs.clientWidth || 280, h = cvs.clientHeight || 68;
+      cvs.width = w; cvs.height = h;
+      const ctx = cvs.getContext('2d');
+      ctx.clearRect(0, 0, w, h);
+      const vmax_ = +document.getElementById('vmax').value || 1.2;
+      const amax_ = +document.getElementById('amax').value || 2.0;
+      const T = 1.0; // normalized
+      const N = 100;
+      // Grid
+      ctx.strokeStyle = 'rgba(80,80,120,0.25)'; ctx.lineWidth = 0.5;
+      for (let i = 0; i <= 4; i++) { ctx.beginPath(); ctx.moveTo(i * w / 4, 0); ctx.lineTo(i * w / 4, h); ctx.stroke(); }
+      ctx.beginPath(); ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2); ctx.stroke();
+      // s(t) — position
+      ctx.beginPath(); ctx.strokeStyle = '#20d080'; ctx.lineWidth = 1.8;
+      for (let i = 0; i <= N; i++) {
+        const t = i / N * T; const { s } = trapProfile(t, T, vmax_, amax_);
+        const px = i / N * w, py = h - s * (h - 8) - 4;
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      // ṡ(t) — velocity (scaled)
+      ctx.beginPath(); ctx.strokeStyle = '#c8a800'; ctx.lineWidth = 1.4; ctx.setLineDash([3, 2]);
+      for (let i = 0; i <= N; i++) {
+        const t = i / N * T; const { sdot } = trapProfile(t, T, vmax_, amax_);
+        const px = i / N * w, py = h / 2 - sdot / vmax_ * (h / 2 - 8);
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      ctx.stroke(); ctx.setLineDash([]);
+      // s̈(t) — accel
+      ctx.beginPath(); ctx.strokeStyle = 'rgba(255,80,80,0.7)'; ctx.lineWidth = 1.2; ctx.setLineDash([2, 3]);
+      for (let i = 0; i <= N; i++) {
+        const t = i / N * T; const { sddot } = trapProfile(t, T, vmax_, amax_);
+        const norm = sddot / amax_;
+        const px = i / N * w, py = h / 2 - norm * (h / 2 - 8);
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      ctx.stroke(); ctx.setLineDash([]);
+      // Legend
+      ctx.font = '9px Inter';
+      ctx.fillStyle = '#20d080'; ctx.fillText('s(t)', 4, 12);
+      ctx.fillStyle = '#c8a800'; ctx.fillText('ṡ(t)', 28, 12);
+      ctx.fillStyle = 'rgba(255,80,80,0.9)'; ctx.fillText('s̈(t)', 52, 12);
+      // Highlight t1 and t2 lines
+      const t1 = Math.min(vmax_ / amax_, T / 2); const t2 = T - t1;
+      ctx.strokeStyle = 'rgba(200,168,0,0.35)'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+      [t1, t2].forEach(tt => {
+        ctx.beginPath(); ctx.moveTo(tt / T * w, 0); ctx.lineTo(tt / T * w, h); ctx.stroke();
+      });
+      ctx.setLineDash([]);
+    }
+
+    /* ═══════════════════ Camera Pinhole Model (Eq. 63–68) ═══════════════════ */
+    function computeCameraIK() {
+      const fx = +document.getElementById('cfx').value;
+      const fy = +document.getElementById('cfy').value;
+      const cx = +document.getElementById('ccx').value;
+      const cy = +document.getElementById('ccy').value;
+      const u = +document.getElementById('cu').value;
+      const v = +document.getElementById('cv_').value;
+      const Zw = +document.getElementById('czw').value;
+      const tx = +document.getElementById('ctx').value;
+      const ty = +document.getElementById('cty').value;
+      const tz = +document.getElementById('ctz').value;
+
+      // Eq. 64–66: inverse projection
+      const Xw = (u - cx) * Zw / fx;
+      const Yw = (v - cy) * Zw / fy;
+      // Eq. 68: camera→robot frame transform
+      // Assume camera is mounted at [tx,ty,tz] above robot base, rotated 90° down (looking at table)
+      // R_cam: camera z-axis maps to robot -y, camera x→robot x, camera y→robot z
+      // Simple: robot_pt = R * cam_pt + t
+      // R = [1,0,0; 0,0,1; 0,-1,0] (camera looking downward)
+      const xr = Xw + tx;
+      const yr = Zw + ty - 0.50;   // depth = forward = robot y direction (approx)
+      const zr = -Yw + tz;
+
+      document.getElementById('camXw').textContent = Xw.toFixed(4) + ' m';
+      document.getElementById('camYw').textContent = Yw.toFixed(4) + ' m';
+      document.getElementById('camZw').textContent = Zw.toFixed(4) + ' m';
+      document.getElementById('camRx').textContent = xr.toFixed(4) + ' m';
+      document.getElementById('camRy').textContent = yr.toFixed(4) + ' m';
+      document.getElementById('camRz').textContent = zr.toFixed(4) + ' m';
+
+      // Update POV camera position from extrinsic
+      updatePovCamera(tx, ty, -tz);
+
+      // Apply offset and try IK
+      const dxv = +document.getElementById('dx').value;
+      const dyv = +document.getElementById('dy').value;
+      const dzv = +document.getElementById('dz').value;
+      const pdx = xr + dxv, pdy = yr + dyv, pdz = zr + dzv;
+      const sol = ikMat(pdx, pdy, pdz, 1);
+
+      document.getElementById('camAlert').classList.toggle('on', !sol);
+      if (sol) {
+        document.getElementById('camIK').textContent =
+          `θ₁=${RAD(sol.t1).toFixed(1)}° θ₂=${RAD(sol.t2).toFixed(1)}° θ₃=${RAD(sol.t3).toFixed(1)}°`;
+      } else {
+        document.getElementById('camIK').textContent = 'Out of reach';
+      }
+      return { sol, xr, yr, zr };
+    }
+
+    window.applyCameraIK = function () {
+      const { sol, xr, yr, zr } = computeCameraIK();
+      if (!sol) return;
+      const t1 = sol.t1, t2 = clamp(sol.t2, T2MIN, T2MAX), t3 = clamp(sol.t3, T3MIN, T3MAX);
+      const pTgt = V3(xr, zr, -yr);
+      updateScene(t1, t2, t3, pTgt);
+      // Update HUD
+      document.getElementById('hStat').textContent = '📷 Camera IK';
+      document.getElementById('hStat').className = 'ok';
+    };
+
+    /* ═══════════════════ Simulation ═══════════════════ */
+    let simRunning = false, simT = 0, simRAF = null, simN = 0;
+    // Trapezoidal: track current and target joint positions for smooth motion
+    let qCurrent = [0, DEG(45), DEG(80)], qTarget = [0, DEG(45), DEG(80)];
+    let trapT = 0, trapTTotal = 0.5;
+    const trajCtx = document.getElementById('trajCvs').getContext('2d');
+
+    window.toggleSim = function () {
+      simRunning = !simRunning;
+      const btn = document.getElementById('sbtn');
+      if (simRunning) {
+        btn.textContent = '⏹  Stop Simulation'; btn.classList.add('stop');
+        document.getElementById('simStats').style.display = 'block';
+        trailBuf = []; trailIdx = 0; trailMeshes.forEach(m => m.visible = false);
+        trapT = 0;
+        runSim();
+      } else {
+        btn.textContent = '▶  Play Simulation'; btn.classList.remove('stop');
+        cancelAnimationFrame(simRAF);
+      }
+    };
+
+    function drawTraj() {
+      const cvs = document.getElementById('trajCvs');
+      const w = cvs.clientWidth, h = cvs.clientHeight || 80;
+      cvs.width = w; cvs.height = h;
+      trajCtx.clearRect(0, 0, w, h);
+      if (trailBuf.length < 2) return;
+      // Scale: MATLAB x ∈ [-0.5,0.6], y ∈ [-0.2,0.2]
+      const sx = (x) => (x + 0.5) / 1.1 * w;
+      const sy = (y) => h / 2 - (y / 0.4) * (h * 0.4);
+      // Grid
+      trajCtx.strokeStyle = 'rgba(80,80,120,0.3)'; trajCtx.lineWidth = 0.5;
+      for (let i = 0; i <= 4; i++) { trajCtx.beginPath(); trajCtx.moveTo(i * w / 4, 0); trajCtx.lineTo(i * w / 4, h); trajCtx.stroke(); }
+      trajCtx.beginPath(); trajCtx.moveTo(0, h / 2); trajCtx.lineTo(w, h / 2); trajCtx.stroke();
+      // Origin
+      trajCtx.fillStyle = 'rgba(200,162,0,0.6)'; trajCtx.beginPath(); trajCtx.arc(sx(0), sy(0), 4, 0, Math.PI * 2); trajCtx.fill();
+      // Trail gradient
+      for (let i = 1; i < trailBuf.length; i++) {
+        const a = i / trailBuf.length;
+        trajCtx.strokeStyle = `rgba(130,100,255,${a * 0.8})`;
+        trajCtx.lineWidth = 1.5;
+        trajCtx.beginPath();
+        trajCtx.moveTo(sx(trailBuf[i - 1].x), sy(trailBuf[i - 1].y));
+        trajCtx.lineTo(sx(trailBuf[i].x), sy(trailBuf[i].y));
+        trajCtx.stroke();
+      }
+      // Current hand
+      if (trailBuf.length > 0) {
+        const last = trailBuf[trailBuf.length - 1];
+        trajCtx.fillStyle = '#20c8ff'; trajCtx.beginPath(); trajCtx.arc(sx(last.x), sy(last.y), 5, 0, Math.PI * 2); trajCtx.fill();
+      }
+      trajCtx.fillStyle = 'rgba(140,120,200,0.6)'; trajCtx.font = '9px Inter';
+      trajCtx.fillText('Top view (x-y)', 4, 10);
+    }
+
+    function runSim() {
+      if (!simRunning) return;
+      const spd = +document.getElementById('spd').value;
+      const hR_ = +document.getElementById('hR').value;
+      const vmax_ = +document.getElementById('vmax').value || 1.2;
+      const amax_ = +document.getElementById('amax').value || 2.0;
+      document.getElementById('spdv').textContent = spd.toFixed(1) + '×';
+      document.getElementById('hRv').textContent = hR_.toFixed(2) + ' m';
+      document.getElementById('vmaxv').textContent = vmax_.toFixed(2);
+      document.getElementById('amaxv').textContent = amax_.toFixed(2);
+
+      const dt = 0.016 * spd;
+      simT += dt; simN++;
+
+      const dx = +document.getElementById('dx').value,
+        dy = +document.getElementById('dy').value,
+        dz = +document.getElementById('dz').value;
+      const xH = clamp(0.45 + hR_ * Math.cos(simT), -0.15, 0.85);
+      const yH = clamp(0.15 * Math.sin(simT), -0.30, 0.30);
+      const zH = 0.025;
+      const pdx = xH + dx, pdy = yH + dy, pdz = zH + dz;
+
+      const solNew = ikMat(pdx, pdy, pdz, 1);
+      if (solNew) {
+        // Update target joints
+        const newQ = [solNew.t1, clamp(solNew.t2, T2MIN, T2MAX), clamp(solNew.t3, T3MIN, T3MAX)];
+
+        // Trapezoidal: compute max angular distance to determine T
+        const maxDelta = Math.max(...newQ.map((q, i) => Math.abs(q - qCurrent[i])));
+        if (maxDelta > 0.005) {
+          // T = time to move maxDelta at vmax/amax trapezoid
+          trapTTotal = Math.max(maxDelta / vmax_ * 1.5, 2 * Math.sqrt(maxDelta / amax_), 0.04);
+          qTarget = [...newQ];
+          trapT = 0;
+        }
+        // Advance trapezoid
+        trapT += dt;
+        const { s, sdot, sddot, phase } = trapProfile(trapT, trapTTotal, vmax_, amax_);
+        // Interpolate joints using s(t)
+        const t1 = qCurrent[0] + s * (qTarget[0] - qCurrent[0]);
+        const t2 = qCurrent[1] + s * (qTarget[1] - qCurrent[1]);
+        const t3 = qCurrent[2] + s * (qTarget[2] - qCurrent[2]);
+        // Update current when segment done
+        if (trapT >= trapTTotal) { qCurrent = [...qTarget]; trapT = trapTTotal; }
+
+        const pTgt3 = V3(xH, zH, -yH);
+        updateScene(t1, t2, t3, pTgt3);
+
+        // Trail
+        trailBuf.push({ x: xH, y: yH });
+        if (trailBuf.length > TRAIL_N) trailBuf.shift();
+        const tMesh = trailMeshes[trailIdx % TRAIL_N];
+        tMesh.position.copy(pTgt3); tMesh.visible = true;
+        trailMeshes.forEach((m, i) => { if (m.visible) m.material.opacity = 0.12 + 0.5 * (i / TRAIL_N); });
+        trailIdx++;
+        drawTraj();
+
+        const fv = fkMat(t1, t2, t3);
+        const err = Math.hypot(fv.x - pdx, fv.y - pdy, fv.z - pdz) * 1e9;
+        const J = jacMat(t1, t2, t3);
+        const mu = Math.abs(det3(J));
+        const lim = solNew.t2 < T2MIN - 0.01 || solNew.t2 > T2MAX + 0.01 || solNew.t3 < T3MIN - 0.01 || solNew.t3 > T3MAX + 0.01;
+        document.getElementById('simF').textContent = (simN % 9999) + (lim ? ' [LIM]' : '');
+        document.getElementById('simE').textContent = err.toExponential(2) + ' nm';
+        document.getElementById('simT2').textContent = RAD(t2).toFixed(1) + '°';
+        document.getElementById('simMu').textContent = mu.toFixed(4);
+        // Trap stats
+        document.getElementById('simPhase').textContent = phase;
+        document.getElementById('simS').textContent = s.toFixed(4);
+        document.getElementById('simSdot').textContent = sdot.toFixed(3);
+        document.getElementById('simSddot').textContent = sddot.toFixed(2);
+        // Redraw trap profile
+        drawTrapProfile();
+      }
+      simRAF = requestAnimationFrame(runSim);
+    }
+
+    /* ═══════════════════ Direct Interaction (Raycaster) ═══════════════════ */
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    let isDraggingTarget = false;
+    const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.025); // Target stays on table surface
+
+    function onPointerDown(e) {
+      if (e.button !== 0) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObject(mTgtS);
+      if (intersects.length > 0) {
+        isDraggingTarget = true;
+        controls.enabled = false;
+        document.body.style.cursor = 'grabbing';
+      }
+    }
+
+    function onPointerMove(e) {
+      if (!isDraggingTarget) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const intersectPt = new THREE.Vector3();
+      if (raycaster.ray.intersectPlane(dragPlane, intersectPt)) {
+        // Update sliders and UI (robot will update in next frame or via event)
+        const x = clamp(intersectPt.x, -0.15, 0.85);
+        const y = clamp(-intersectPt.z, -0.30, 0.30);
+
+        if (window._tab === 'jac') {
+          document.getElementById('jxd').value = x;
+          document.getElementById('jyd').value = y;
+        } else {
+          document.getElementById('xd').value = x;
+          document.getElementById('yd').value = y;
+        }
+        update();
+      }
+    }
+
+    function onPointerUp() {
+      isDraggingTarget = false;
+      controls.enabled = true;
+      document.body.style.cursor = 'default';
+    }
+
+    renderer.domElement.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+
+    /* ═══════════════════ Resize ═══════════════════ */
+    window.addEventListener('resize', () => {
+      const w = wrap.clientWidth, h = wrap.clientHeight;
+      camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h);
+    });
+
+    /* ═══════════════════ Render loop ═══════════════════ */
+    (function anim() {
+      requestAnimationFrame(anim);
+      controls.update();
+      renderer.render(scene, camera);
+      povRenderer.render(scene, povCamera);
+    })();
+
+    /* Initial draw */
+    update();
+  </script>
+
+  <script>
+    /* ── UI helpers ── */
+
+    window._tab = 'ik';
+
+    window.setTab = function (t) {
+      window._tab = t;
+      ['ik', 'jac', 'sim', 'cam'].forEach(id => {
+        document.getElementById('pane-' + id).classList.toggle('on', id === t);
+      });
+      document.querySelectorAll('.tab').forEach((el, i) => {
+        el.classList.toggle('active', ['ik', 'jac', 'sim', 'cam'][i] === t);
+      });
+      if (t === 'cam') { computeCameraIK(); drawTrapProfile(); }
+      if (t === 'sim') { drawTrapProfile(); }
+      if (window.doUpdate) window.doUpdate();
+    };
+
+    // Wire all controls
+    ['xd', 'yd', 'jxd', 'jyd', 'dx', 'dy', 'dz'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('input', () => { if (window.doUpdate) window.doUpdate(); });
+    });
+    ['elbow'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('change', () => { if (window.doUpdate) window.doUpdate(); });
+    });
+    // Camera tab controls
+    ['cfx', 'cfy', 'ccx', 'ccy', 'cu', 'cv_', 'czw', 'ctx', 'cty', 'ctz'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('input', () => {
+        document.getElementById(id + 'v').textContent = parseFloat(el.value).toFixed(id.startsWith('c') && !id.startsWith('cf') && !id.startsWith('cc') && !id.startsWith('cu') && !id.startsWith('cv') && !id.startsWith('cz') ? 2 : 2);
+        computeCameraIK();
+      });
+    });
+    // Trap velocity controls
+    ['vmax', 'amax'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('input', () => { drawTrapProfile(); });
+    });
+    // Live-update camera slider labels properly
+    ['cfx', 'cfy', 'ccx', 'ccy', 'cu', 'cv_', 'czw', 'ctx', 'cty', 'ctz'].forEach(id => {
+      const el = document.getElementById(id);
+      const out = document.getElementById(id + 'v');
+      if (el && out) el.addEventListener('input', () => { out.textContent = parseFloat(el.value).toFixed(2); computeCameraIK(); });
+    });
+    // Initial draws
+    drawTrapProfile();
+    computeCameraIK();
+  </script>
+</body>
+
+</html>
