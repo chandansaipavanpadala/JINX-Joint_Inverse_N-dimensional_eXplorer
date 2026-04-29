@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JINX: Joint Inverse N-dimensional eXplorer</title>
+  <meta name="description"
+    content="JINX — Web-based 3D robotic simulator. Explore inverse kinematics, Jacobian analysis, and occlusion-avoidance across multiple robot configurations." />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
+  <style>
+    /* ── Landing-page-specific styles (uses global CSS vars) ── */
+    :root {
+      --bg: #04040a;
+      --bg2: rgba(15, 15, 28, 0.72);
+      --bg3: rgba(24, 24, 40, 0.85);
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #f0f0f5;
+      --muted: #8080a8;
+      --gold: #ffcc00;
+      --goldb: #ffeb3b;
+      --cyan: #00e5ff;
+      --grn: #00f07f;
+      --red2: #ff4d4d;
+      --accent: #6c5ce7;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* ── Animated background ── */
+    .bg-canvas {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(108, 92, 231, 0.15), transparent),
+        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(255, 204, 0, 0.06), transparent),
+        radial-gradient(ellipse 50% 50% at 10% 80%, rgba(0, 229, 255, 0.05), transparent);
+    }
+
+    /* floating particles */
+    .particle {
+      position: fixed; border-radius: 50%; pointer-events: none; z-index: 0;
+      animation: drift linear infinite;
+    }
+    @keyframes drift {
+      0%   { transform: translateY(0) rotate(0deg); opacity: 0; }
+      10%  { opacity: 1; }
+      90%  { opacity: 1; }
+      100% { transform: translateY(-100vh) rotate(360deg); opacity: 0; }
+    }
+
+    /* ── Page wrapper ── */
+    .landing {
+      position: relative; z-index: 1;
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 40px 24px 60px;
+      gap: 48px;
+    }
+
+    /* ── Hero ── */
+    .hero { text-align: center; max-width: 720px; }
+    .hero-badge {
+      display: inline-block; padding: 5px 16px; border-radius: 24px;
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--gold);
+      background: rgba(255, 204, 0, 0.08);
+      border: 1px solid rgba(255, 204, 0, 0.18);
+      margin-bottom: 20px;
+      animation: fadeUp 0.6s ease-out both;
+    }
+    .hero h1 {
+      font-size: clamp(28px, 5vw, 52px);
+      font-weight: 900; letter-spacing: -0.03em;
+      line-height: 1.1; margin-bottom: 8px;
+      animation: fadeUp 0.7s ease-out 0.1s both;
+    }
+    .hero h1 .accent-text {
+      background: linear-gradient(135deg, var(--gold), var(--goldb), var(--cyan));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero .subtitle {
+      font-size: clamp(13px, 2vw, 16px); color: var(--muted);
+      font-weight: 300; line-height: 1.6; margin-top: 14px;
+      max-width: 540px; margin-inline: auto;
+      animation: fadeUp 0.7s ease-out 0.2s both;
+    }
+
+    /* ── Grid ── */
+    .config-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px; width: 100%; max-width: 960px;
+      animation: fadeUp 0.8s ease-out 0.3s both;
+    }
+
+    /* ── Robot Card ── */
+    .robot-card {
+      position: relative;
+      background: rgba(10, 10, 22, 0.65);
+      border: 1px solid var(--border);
+      border-radius: 16px; padding: 28px 24px 24px;
+      backdrop-filter: blur(18px);
+      transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex; flex-direction: column; gap: 16px;
+      overflow: hidden; cursor: default;
+      text-decoration: none; color: inherit;
+    }
+    .robot-card::before {
+      content: ''; position: absolute; inset: 0; border-radius: 16px;
+      background: radial-gradient(circle at 50% 0%, rgba(255,204,0,0.06), transparent 60%);
+      opacity: 0; transition: opacity 0.4s;
+    }
+    .robot-card.active { cursor: pointer; }
+    .robot-card.active:hover {
+      border-color: rgba(255, 204, 0, 0.25);
+      transform: translateY(-6px);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 40px rgba(255,204,0,0.06);
+    }
+    .robot-card.active:hover::before { opacity: 1; }
+
+    .robot-card.disabled { opacity: 0.45; }
+    .robot-card.disabled * { pointer-events: none; }
+
+    .card-icon {
+      width: 52px; height: 52px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px;
+      background: rgba(255, 204, 0, 0.08);
+      border: 1px solid rgba(255, 204, 0, 0.12);
+    }
+    .robot-card.disabled .card-icon {
+      background: rgba(255, 255, 255, 0.03);
+      border-color: rgba(255, 255, 255, 0.06);
+    }
+
+    .card-header {
+      display: flex; align-items: center; gap: 14px;
+    }
+    .card-titles h2 {
+      font-size: 16px; font-weight: 700; letter-spacing: -0.01em;
+      color: #fff;
+    }
+    .robot-card.disabled .card-titles h2 { color: var(--muted); }
+    .card-titles .dof-badge {
+      display: inline-block; font-size: 9px; font-weight: 700;
+      padding: 2px 8px; border-radius: 10px; margin-top: 4px;
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .dof-badge.gold {
+      background: rgba(255, 204, 0, 0.12); color: var(--gold);
+      border: 1px solid rgba(255, 204, 0, 0.2);
+    }
+    .dof-badge.muted {
+      background: rgba(255, 255, 255, 0.04); color: var(--muted);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .card-desc {
+      font-size: 12px; color: var(--muted); line-height: 1.6;
+      font-weight: 300;
+    }
+
+    .card-features {
+      display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto;
+    }
+    .feature-tag {
+      font-size: 9px; font-weight: 600; padding: 3px 10px;
+      border-radius: 20px; text-transform: uppercase;
+      letter-spacing: 0.04em;
+      background: rgba(0, 229, 255, 0.06);
+      border: 1px solid rgba(0, 229, 255, 0.12);
+      color: rgba(0, 229, 255, 0.7);
+    }
+    .robot-card.disabled .feature-tag {
+      background: rgba(255,255,255,0.02);
+      border-color: rgba(255,255,255,0.05);
+      color: rgba(255,255,255,0.2);
+    }
+
+    .coming-soon-overlay {
+      position: absolute; inset: 0; border-radius: 16px;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(4, 4, 10, 0.5); z-index: 2;
+    }
+    .coming-soon-tag {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--muted);
+      padding: 6px 18px; border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(0,0,0,0.4);
+    }
+
+    .card-cta {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; font-weight: 600; color: var(--gold);
+      margin-top: 4px; transition: gap 0.3s;
+    }
+    .robot-card.active:hover .card-cta { gap: 14px; }
+    .card-cta .arrow { transition: transform 0.3s; }
+    .robot-card.active:hover .card-cta .arrow { transform: translateX(4px); }
+
+    /* ── Footer ── */
+    .landing-footer {
+      text-align: center; font-size: 11px; color: rgba(255,255,255,0.2);
+      font-weight: 300; letter-spacing: 0.02em;
+      animation: fadeUp 0.8s ease-out 0.5s both;
+    }
+    .landing-footer a {
+      color: var(--gold); text-decoration: none; font-weight: 500;
+    }
+    .landing-footer a:hover { text-decoration: underline; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      .config-grid { grid-template-columns: 1fr; }
+      .landing { padding: 32px 16px 48px; gap: 36px; }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Animated background -->
+  <div class="bg-canvas"></div>
+
+  <!-- Floating particles (generated by JS below) -->
+
+  <div class="landing">
+    <!-- Hero -->
+    <header class="hero">
+      <div class="hero-badge">Open-Source Robotic Simulator</div>
+      <h1>
+        <span class="accent-text">JINX</span><br />
+        Joint Inverse N-dimensional eXplorer
+      </h1>
+      <p class="subtitle">
+        An interactive 3D simulator for exploring inverse kinematics, Jacobian analysis,
+        and occlusion-avoidance strategies across multiple robotic configurations.
+      </p>
+    </header>
+
+    <!-- Configuration Grid -->
+    <section class="config-grid" aria-label="Robot configurations">
+
+      <!-- Card 1 — Active -->
+      <a href="src/pages/rrr-lamp.html" class="robot-card active" id="card-rrr-lamp">
+        <div class="card-header">
+          <div class="card-icon">💡</div>
+          <div class="card-titles">
+            <h2>3-DOF RRR Shadow Lamp</h2>
+            <span class="dof-badge gold">3 DOF · RRR</span>
+          </div>
+        </div>
+        <p class="card-desc">
+          A desk lamp with three revolute joints. Explore closed-form IK, analytical Jacobian,
+          singularity detection, and real-time occlusion-avoidance simulation with trapezoidal velocity profiles.
+        </p>
+        <div class="card-features">
+          <span class="feature-tag">Inverse Kinematics</span>
+          <span class="feature-tag">Jacobian</span>
+          <span class="feature-tag">Occlusion Avoidance</span>
+          <span class="feature-tag">DH Parameters</span>
+        </div>
+        <div class="card-cta">
+          Launch Simulator <span class="arrow">→</span>
+        </div>
+      </a>
+
+      <!-- Card 2 — Coming Soon -->
+      <div class="robot-card disabled" id="card-scara">
+        <div class="coming-soon-overlay">
+          <span class="coming-soon-tag">Coming Soon</span>
+        </div>
+        <div class="card-header">
+          <div class="card-icon">🦾</div>
+          <div class="card-titles">
+            <h2>SCARA Arm</h2>
+            <span class="dof-badge muted">4 DOF · RRPR</span>
+          </div>
+        </div>
+        <p class="card-desc">
+          Selective Compliance Articulated Robot Arm — ideal for pick-and-place operations
+          with high-speed horizontal motion and vertical compliance.
+        </p>
+        <div class="card-features">
+          <span class="feature-tag">Pick & Place</span>
+          <span class="feature-tag">Workspace Analysis</span>
+          <span class="feature-tag">Trajectory</span>
+        </div>
+      </div>
+
+      <!-- Card 3 — Coming Soon -->
+      <div class="robot-card disabled" id="card-6dof">
+        <div class="coming-soon-overlay">
+          <span class="coming-soon-tag">Coming Soon</span>
+        </div>
+        <div class="card-header">
+          <div class="card-icon">🤖</div>
+          <div class="card-titles">
+            <h2>6-DOF Anthropomorphic</h2>
+            <span class="dof-badge muted">6 DOF · 6R</span>
+          </div>
+        </div>
+        <p class="card-desc">
+          Full six-axis anthropomorphic manipulator with spherical wrist. Explore redundancy resolution,
+          workspace mapping, and advanced trajectory planning.
+        </p>
+        <div class="card-features">
+          <span class="feature-tag">6-Axis IK</span>
+          <span class="feature-tag">Spherical Wrist</span>
+          <span class="feature-tag">Redundancy</span>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Footer -->
+    <footer class="landing-footer">
+      Built with Three.js · Vanilla JS · Vite &nbsp;·&nbsp;
+      <a href="https://github.com/chandansaipavanpadala/JINX-Joint_Inverse_N-dimensional_eXplorer"
+        target="_blank" rel="noopener">GitHub ↗</a>
+    </footer>
+  </div>
+
+  <!-- Particle animation -->
+  <script>
+    (function () {
+      const count = 18;
+      const colors = ['rgba(255,204,0,0.15)', 'rgba(0,229,255,0.12)', 'rgba(108,92,231,0.12)'];
+      for (let i = 0; i < count; i++) {
+        const p = document.createElement('div');
+        p.classList.add('particle');
+        const size = Math.random() * 3 + 1;
+        p.style.width = size + 'px';
+        p.style.height = size + 'px';
+        p.style.left = Math.random() * 100 + 'vw';
+        p.style.top = (100 + Math.random() * 20) + 'vh';
+        p.style.background = colors[Math.floor(Math.random() * colors.length)];
+        p.style.animationDuration = (12 + Math.random() * 20) + 's';
+        p.style.animationDelay = (Math.random() * 15) + 's';
+        document.body.appendChild(p);
+      }
+    })();
+  </script>
+</body>
+
+</html>
