@@ -16,13 +16,12 @@ const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
 const BASE_H  = 0.35;  // d1 — base column height
 const L1      = 0.30;  // a1 — upper arm length
 const L2      = 0.25;  // a2 — forearm length
-const STROKE  = 0.20;  // max prismatic stroke
+const STROKE  = 0.35;  // max prismatic stroke (matches DH limitMax)
 
 export default class ScaraSceneManager {
 
-  constructor(canvasId = 'cw', povId = 'camPov') {
+  constructor(canvasId = 'cw') {
     const wrap = document.getElementById(canvasId);
-    const povWrap = document.getElementById(povId);
 
     // ── Scene ──
     this._scene = new THREE.Scene();
@@ -30,8 +29,8 @@ export default class ScaraSceneManager {
     this._scene.fog = new THREE.Fog(0x070710, 2.5, 5.0);
 
     // ── Camera ──
-    this._camera = new THREE.PerspectiveCamera(44, wrap.clientWidth / wrap.clientHeight, 0.01, 10);
-    this._camera.position.set(0.9, 1.0, 0.9);
+    this._camera = new THREE.PerspectiveCamera(50, wrap.clientWidth / wrap.clientHeight, 0.01, 10);
+    this._camera.position.set(1.2, 1.0, 1.2);
 
     // ── Renderer ──
     this._renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -58,24 +57,14 @@ export default class ScaraSceneManager {
 
     // ── OrbitControls ──
     this._controls = new OrbitControls(this._camera, this._renderer.domElement);
-    this._controls.target.set(0.20, 0.25, 0);
+    this._controls.target.set(0.15, 0.12, 0);
     this._controls.enableDamping = true;
     this._controls.dampingFactor = 0.07;
     this._controls.minDistance = 0.2;
     this._controls.maxDistance = 4;
     this._camera.lookAt(this._controls.target);
 
-    // ── POV Camera ──
-    this._povRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    this._povRenderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
-    this._povRenderer.shadowMap.enabled = true;
-    this._povRenderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this._povRenderer.toneMappingExposure = 1.1;
-    this._povRenderer.setSize(200, 150);
-    povWrap.appendChild(this._povRenderer.domElement);
-    this._povCamera = new THREE.PerspectiveCamera(55, 200 / 150, 0.01, 10);
-    this._povCamera.position.set(0.0, 0.60, 0.40);
-    this._povCamera.lookAt(0.30, 0.0, 0.0);
+
 
     // ── Init sub-systems ──
     this._initLighting();
@@ -573,14 +562,7 @@ export default class ScaraSceneManager {
     this._trailIdx = 0;
   }
 
-  /* ════════════════════════════════════════════════════════
-     POV Camera
-     ════════════════════════════════════════════════════════ */
-  updatePovCamera(tx, ty, tz) {
-    this._povCamera.position.set(tx, ty, tz);
-    this._povCamera.lookAt(0.30, 0.02, 0.0);
-    this._povCamera.updateMatrixWorld();
-  }
+
 
   /* ════════════════════════════════════════════════════════
      Render Loop
@@ -590,7 +572,7 @@ export default class ScaraSceneManager {
       requestAnimationFrame(loop);
       this._controls.update();
       this._renderer.render(this._scene, this._camera);
-      this._povRenderer.render(this._scene, this._povCamera);
+
     };
     loop();
   }

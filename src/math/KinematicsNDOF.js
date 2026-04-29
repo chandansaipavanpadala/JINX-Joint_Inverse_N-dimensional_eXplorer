@@ -590,7 +590,7 @@ export const SCARA_DH_CONFIG = Object.freeze([
     theta: 0,
     type: 'P',
     limitMin: 0,        //   0 mm
-    limitMax: 0.200,    // 200 mm
+    limitMax: 0.350,    // 350 mm
   },
   {
     a: 0,

@@ -37,8 +37,6 @@
           <div><b>IK Error</b> <span id="hErr">—</span></div>
           <div><b>Status</b> <span id="hStat" class="ok">—</span></div>
         </div>
-        <div id="camPov"></div>
-        <div class="pov-label">Camera POV</div>
         <div class="cam-hint">Drag to orbit · Scroll to zoom · Right-drag to pan</div>
       </div>
 
@@ -58,7 +56,7 @@
               value="0" step="1"><span class="val" id="fk-q1v">0</span></div>
           <div class="ctrl"><label>θ₂ Elbow Yaw (°)</label><input type="range" id="fk-q2" min="-135" max="135"
               value="0" step="1"><span class="val" id="fk-q2v">0</span></div>
-          <div class="ctrl"><label>d₃ Z-Stroke (mm)</label><input type="range" id="fk-q3" min="0" max="200" value="0"
+          <div class="ctrl"><label>d₃ Z-Stroke (mm)</label><input type="range" id="fk-q3" min="0" max="350" value="0"
               step="1"><span class="val" id="fk-q3v">0</span></div>
           <div class="ctrl"><label>θ₄ Tool Roll (°)</label><input type="range" id="fk-q4" min="-180" max="180"
               value="0" step="1"><span class="val" id="fk-q4v">0</span></div>
@@ -201,7 +199,7 @@
             <tr><td>3</td><td>0</td><td>0</td><td>d₃★</td><td>0</td><td>P</td></tr>
             <tr><td>4</td><td>0</td><td>0</td><td>0</td><td>θ₄★</td><td>R</td></tr>
           </table>
-          <div style="font-size:10px;color:var(--muted)">L₁=0.30 m · L₂=0.25 m · d₁=0.35 m · Stroke: 0–200 mm · (★ variable)</div>
+          <div style="font-size:10px;color:var(--muted)">L₁=0.30 m · L₂=0.25 m · d₁=0.35 m · Stroke: 0–350 mm · (★ variable)</div>
         </div>
 
         <!-- Joint limits -->
@@ -211,7 +209,7 @@
             <tr><th>Joint</th><th>Min</th><th>Max</th><th>Type</th></tr>
             <tr><td>θ₁ Base Yaw</td><td>−135°</td><td>+135°</td><td>Revolute</td></tr>
             <tr><td>θ₂ Elbow</td><td>−135°</td><td>+135°</td><td>Revolute</td></tr>
-            <tr><td>d₃ Stroke</td><td>0 mm</td><td>200 mm</td><td>Prismatic</td></tr>
+            <tr><td>d₃ Stroke</td><td>0 mm</td><td>350 mm</td><td>Prismatic</td></tr>
             <tr><td>θ₄ Tool Roll</td><td>−180°</td><td>+180°</td><td>Revolute</td></tr>
           </table>
         </div>

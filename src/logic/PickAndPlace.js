@@ -44,7 +44,7 @@ const DEFAULTS = {
   pickPos:    [0.40, 0.15, 0.35],
   dropPos:    [0.30, -0.20, 0.35],
   safeZ:      0.35,
-  graspZ:     0.15,
+  graspZ:     0.03,
   durations: {
     [STATE.PRE_GRASP]: 1.2,
     [STATE.GRASP]:     0.8,

@@ -8,8 +8,8 @@
 import ScaraSceneManager from './core/ScaraSceneManager.js';
 import ScaraUIController from './ui/ScaraUIController.js';
 
-// Instantiate the 3D scene (renders into #cw, POV into #camPov)
-const sceneManager = new ScaraSceneManager('cw', 'camPov');
+// Instantiate the 3D scene (renders into #cw)
+const sceneManager = new ScaraSceneManager('cw');
 
 // Instantiate the UI controller (wires sliders, raycaster, DLS IK)
 const uiController = new ScaraUIController(sceneManager);
