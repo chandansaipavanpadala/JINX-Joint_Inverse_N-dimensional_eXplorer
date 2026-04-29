@@ -47,6 +47,12 @@ html, body {
   border: 1px solid rgba(255, 204, 0, 0.2); margin-left: 8px;
   text-transform: uppercase; letter-spacing: 0.05em;
 }
+.back-btn {
+  color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 500;
+  padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border);
+  transition: all 0.2s; white-space: nowrap; flex-shrink: 0;
+}
+.back-btn:hover { color: #fff; border-color: rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); }
 .body-row { display: flex; flex: 1; overflow: hidden; position: relative; }
 
 /* Canvas Area */
@@ -173,6 +179,13 @@ html, body {
   background: rgba(0, 229, 255, 0.06); border: 1px solid rgba(0, 229, 255, 0.15);
   color: #a0f0ff; line-height: 1.5;
 }
+.sel {
+  width: 100%; padding: 8px 12px; border-radius: 8px; font-size: 12px;
+  background: rgba(15,15,28,0.8); color: var(--text); border: 1px solid var(--border);
+  font-family: 'Inter', sans-serif; cursor: pointer; outline: none;
+  transition: border-color 0.2s;
+}
+.sel:hover, .sel:focus { border-color: var(--cyan); }
 
 /* Table */
 .dht {
@@ -192,6 +205,9 @@ html, body {
 
 /* Jacobian Matrix */
 .jgrid { display: grid; grid-template-columns: 24px repeat(3, 1fr); gap: 4px; }
+.jgrid.jgrid-4 { grid-template-columns: 24px repeat(4, 1fr); }
+.jh { font-size: 9px; color: var(--muted); text-align: center; font-weight: 700; padding: 4px 0; }
+.jrow-lbl { font-size: 10px; color: var(--muted); font-weight: 600; display: flex; align-items: center; justify-content: center; }
 .jc {
   border-radius: 6px; padding: 8px 4px; font-size: 11px;
   font-family: 'JetBrains Mono', monospace; background: rgba(0, 0, 0, 0.2);

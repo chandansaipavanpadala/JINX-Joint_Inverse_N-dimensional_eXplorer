@@ -8,6 +8,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         rrrLamp: resolve(__dirname, 'src/pages/rrr-lamp.html'),
+        scara: resolve(__dirname, 'src/pages/scara.html'),
       },
     },
   },

@@ -68,6 +68,26 @@ export default class UIController {
     dom.addEventListener('pointerdown', e => this._onPointerDown(e));
     window.addEventListener('pointermove', e => this._onPointerMove(e));
     window.addEventListener('pointerup', () => this._onPointerUp());
+    // Reset
+    const resetBtn = $('resetBtn');
+    if (resetBtn) resetBtn.addEventListener('click', () => this._resetPose());
+  }
+
+  /* ═══════════ Reset Pose ═══════════ */
+  _resetPose() {
+    // Stop simulation
+    if (this.simRunning) this.toggleSim();
+    // Reset to default
+    const defaultQ = [0, DEG(45), DEG(80)];
+    this.qCurrent = [...defaultQ];
+    this.qTarget = [...defaultQ];
+    // Reset sliders
+    $('xd').value = 0.20; $('yd').value = 0.42;
+    $('jxd').value = 0.20; $('jyd').value = 0.42;
+    // Reset trail
+    this.trailBuf = [];
+    this.sm.resetTrail();
+    this.update();
   }
 
   /* ═══════════ Tabs ═══════════ */
