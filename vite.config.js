@@ -9,6 +9,7 @@ export default defineConfig({
         main: resolve(__dirname, 'index.html'),
         rrrLamp: resolve(__dirname, 'src/pages/rrr-lamp.html'),
         scara: resolve(__dirname, 'src/pages/scara.html'),
+        welder: resolve(__dirname, 'src/pages/welder.html'),
       },
     },
   },

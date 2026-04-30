@@ -37,12 +37,18 @@ export function trapProfile(t, T, vmax, amax) {
   const isTriangle = (2 * t1 > T);
 
   if (isTriangle) {
-    const t1t = Math.sqrt(T / amax);
-    if (t < t1t) {
-      const s = 0.5 * amax * t * t / (T);
+    // Symmetric triangular profile: peak at T/2
+    const tMid = T / 2;
+    // Total area (displacement) = 0.5 * a_peak * tMid^2 * 2 = a_peak * tMid^2
+    // where a_peak = 1 / tMid^2 to normalize s to [0, 1]
+    // Simplified: s = 2*(t/T)^2 during accel, s = 1 - 2*((T-t)/T)^2 during decel
+    if (t < tMid) {
+      const ratio = t / T;
+      const s = 2 * ratio * ratio;
       return { s: clamp(s, 0, 1), sdot: amax * t, sddot: amax, phase: 'accel▲' };
     } else {
-      const s = 1 - 0.5 * amax * (T - t) * (T - t) / (T);
+      const ratio = (T - t) / T;
+      const s = 1 - 2 * ratio * ratio;
       return { s: clamp(s, 0, 1), sdot: amax * (T - t), sddot: -amax, phase: 'decel▼' };
     }
   }

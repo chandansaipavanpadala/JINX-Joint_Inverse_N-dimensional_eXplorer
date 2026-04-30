@@ -88,25 +88,25 @@ function dhMatrix(theta, d, a, alpha) {
 
   const m = new Float64Array(16);
   // Column 0
-  m[0]  = ct;
-  m[1]  = st;
-  m[2]  = 0;
-  m[3]  = 0;
+  m[0] = ct;
+  m[1] = st;
+  m[2] = 0;
+  m[3] = 0;
   // Column 1
-  m[4]  = -st * ca;
-  m[5]  =  ct * ca;
-  m[6]  =  sa;
-  m[7]  =  0;
+  m[4] = -st * ca;
+  m[5] = ct * ca;
+  m[6] = sa;
+  m[7] = 0;
   // Column 2
-  m[8]  =  st * sa;
-  m[9]  = -ct * sa;
-  m[10] =  ca;
-  m[11] =  0;
+  m[8] = st * sa;
+  m[9] = -ct * sa;
+  m[10] = ca;
+  m[11] = 0;
   // Column 3
-  m[12] =  a * ct;
-  m[13] =  a * st;
-  m[14] =  d;
-  m[15] =  1;
+  m[12] = a * ct;
+  m[13] = a * st;
+  m[14] = d;
+  m[15] = 1;
 
   return m;
 }
@@ -208,11 +208,11 @@ export function fk(q, dhTable) {
     if (dh.type === 'P') {
       // Prismatic: variable is d, theta is fixed offset
       theta_i = dh.theta;
-      d_i     = dh.d + q[i];
+      d_i = dh.d + q[i];
     } else {
       // Revolute (default): variable is theta, d is fixed offset
       theta_i = dh.theta + q[i];
-      d_i     = dh.d;
+      d_i = dh.d;
     }
 
     const Ti = dhMatrix(theta_i, d_i, dh.a, dh.alpha);
@@ -444,7 +444,11 @@ export function ik_dls(
 ) {
   const n = dhTable.length;
   const m = 3; // position-only (linear velocity rows of Jacobian)
-  const lambda2 = damping * damping;
+  const lambda_base2 = damping * damping;
+
+  // Adaptive damping parameters
+  const lambda_max = 0.5;               // Maximum damping near singularities
+  const mu_threshold = 0.01;            // Manipulability threshold for damping ramp
 
   // Working copy of joint variables
   const q = Float64Array.from(qCurrent);
@@ -492,7 +496,23 @@ export function ik_dls(
     // 1. Compute  A = J · Jᵀ  (m×m)
     const A = matMulTranspose(Jv, m, n);
 
-    // 2. Add damping: A += λ² · I
+    // 2. Adaptive damping: increase λ near singularities
+    //    μ = √det(J·Jᵀ) — manipulability index
+    const detA = A[0] * (A[4] * A[8] - A[5] * A[7])
+               - A[1] * (A[3] * A[8] - A[5] * A[6])
+               + A[2] * (A[3] * A[7] - A[4] * A[6]);
+    const mu = Math.sqrt(Math.max(0, detA));
+
+    let lambda2;
+    if (mu < mu_threshold) {
+      // Ramp damping from base to max as μ drops to zero
+      const ratio = 1 - (mu / mu_threshold);
+      lambda2 = lambda_base2 + lambda_max * lambda_max * ratio * ratio;
+    } else {
+      lambda2 = lambda_base2;
+    }
+
+    // 3. Add damping: A += λ² · I
     for (let i = 0; i < m; i++) {
       A[i * m + i] += lambda2;
     }
@@ -572,7 +592,7 @@ export const SCARA_DH_CONFIG = Object.freeze([
     theta: 0,
     type: 'R',
     limitMin: -2.356,   // -135°
-    limitMax:  2.356,   //  135°
+    limitMax: 2.356,   //  135°
   },
   {
     a: 0.25,
@@ -581,7 +601,7 @@ export const SCARA_DH_CONFIG = Object.freeze([
     theta: 0,
     type: 'R',
     limitMin: -2.356,   // -135°
-    limitMax:  2.356,   //  135°
+    limitMax: 2.356,   //  135°
   },
   {
     a: 0,
@@ -599,6 +619,20 @@ export const SCARA_DH_CONFIG = Object.freeze([
     theta: 0,
     type: 'R',
     limitMin: -Math.PI, // -180°
-    limitMax:  Math.PI, //  180°
+    limitMax: Math.PI, //  180°
   },
 ]);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  §7  WELDING 6-DOF ANTHROPOMORPHIC CONFIGURATION
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const WELDING_DH_CONFIG = Object.freeze([
+  { a: 0, alpha: Math.PI / 2, d: 0.25, theta: 0, type: 'R', limitMin: -Math.PI, limitMax: Math.PI },
+  { a: 0.35, alpha: 0, d: 0, theta: Math.PI / 2, type: 'R', limitMin: -Math.PI / 2, limitMax: Math.PI / 2 },
+  { a: 0.25, alpha: 0, d: 0, theta: 0, type: 'R', limitMin: -Math.PI * 0.8, limitMax: Math.PI * 0.8 },
+  { a: 0, alpha: Math.PI / 2, d: 0.10, theta: 0, type: 'R', limitMin: -Math.PI, limitMax: Math.PI },
+  { a: 0, alpha: -Math.PI / 2, d: 0.10, theta: 0, type: 'R', limitMin: -Math.PI, limitMax: Math.PI },
+  { a: 0, alpha: 0, d: 0.05, theta: 0, type: 'R', limitMin: -Math.PI, limitMax: Math.PI }
+]);
+
