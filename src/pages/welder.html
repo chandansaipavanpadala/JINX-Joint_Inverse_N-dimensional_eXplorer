@@ -12,14 +12,6 @@
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
-  <style>
-    /* 6-DOF specific Jacobian grid: 3 rows × 6 columns + row label */
-    .jgrid-6 {
-      display: grid;
-      grid-template-columns: 24px repeat(6, 1fr);
-      gap: 4px;
-    }
-  </style>
 </head>
 
 <body>
@@ -88,15 +80,15 @@
 
           <div class="sec">FK End-Effector Position</div>
           <div class="cards" style="grid-template-columns: 1fr 1fr 1fr">
-            <div class="card">
+            <div class="card axis-x">
               <div class="cl">X (m)</div>
               <div class="cv" id="val-x">—</div>
             </div>
-            <div class="card">
+            <div class="card axis-y">
               <div class="cl">Y (m)</div>
               <div class="cv" id="val-y">—</div>
             </div>
-            <div class="card">
+            <div class="card axis-z">
               <div class="cl">Z (m)</div>
               <div class="cv" id="val-z">—</div>
             </div>
@@ -113,11 +105,11 @@
 
           <div class="sec">Singularity Metrics</div>
           <div class="cards">
-            <div class="card">
+            <div class="card has-tooltip" data-tooltip="det(J·Jᵀ) for 3×6 linear Jacobian. Zero = loss of mobility.">
               <div class="cl">det(J·Jᵀ)</div>
               <div class="cv" id="val-det">—</div>
             </div>
-            <div class="card">
+            <div class="card has-tooltip" data-tooltip="Manipulability μ = √(det(J·Jᵀ)). Higher = more dexterous configuration.">
               <div class="cl">Manipulability μ</div>
               <div class="cv" id="val-mu">—</div>
             </div>
@@ -151,6 +143,7 @@
           </div>
 
           <button class="sbtn" id="btn-weld">▶ Start Welding</button>
+          <button class="sbtn" id="analyticsBtn" style="background:linear-gradient(135deg,#6c5ce7,#a855f7);color:#fff;box-shadow:0 4px 15px rgba(108,92,231,0.3);margin-top:6px">📈  Open Analytics</button>
 
           <div class="sec">Live Status</div>
           <div class="cards" style="grid-template-columns:1fr 1fr">

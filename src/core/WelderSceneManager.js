@@ -28,10 +28,10 @@ export class WelderSceneManager {
   constructor(containerId) {
     const wrap = document.getElementById(containerId);
 
-    // ── Scene ──
+    // ── Scene — dark, smoky welding booth atmosphere ──
     this._scene = new THREE.Scene();
-    this._scene.background = new THREE.Color(0x070710);
-    this._scene.fog = new THREE.Fog(0x070710, 2.5, 5.0);
+    this._scene.background = new THREE.Color(0x06060c);
+    this._scene.fog = new THREE.FogExp2(0x06060c, 0.28);
 
     // ── Camera ──
     this._camera = new THREE.PerspectiveCamera(50, wrap.clientWidth / wrap.clientHeight, 0.01, 10);
@@ -44,7 +44,7 @@ export class WelderSceneManager {
     this._renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this._renderer.setSize(wrap.clientWidth, wrap.clientHeight);
     this._renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this._renderer.toneMappingExposure = 1.3;
+    this._renderer.toneMappingExposure = 0.95;
     wrap.insertBefore(this._renderer.domElement, wrap.firstChild);
 
     // ── Environment map ──
@@ -53,10 +53,11 @@ export class WelderSceneManager {
     const envScene = new THREE.Scene();
     envScene.add(new THREE.Mesh(
       new THREE.BoxGeometry(100, 100, 100),
-      new THREE.MeshBasicMaterial({ color: 0x050510, side: THREE.BackSide })
+      new THREE.MeshBasicMaterial({ color: 0x030308, side: THREE.BackSide })
     ));
-    const envL = new THREE.RectAreaLight(0xffffff, 5, 10, 10);
-    envL.position.set(5, 10, 5); envL.lookAt(0, 0, 0);
+    // Dim overhead panel — just enough for metallic reflections
+    const envL = new THREE.RectAreaLight(0x8090b0, 2.5, 8, 8);
+    envL.position.set(0, 12, 0); envL.lookAt(0, 0, 0);
     envScene.add(envL);
     this._scene.environment = pmrem.fromScene(envScene).texture;
 
@@ -87,34 +88,40 @@ export class WelderSceneManager {
   }
 
   /* ════════════════════════════════════════════════════════
-     Lighting — identical to SCARA Studio
+     Lighting — Dark, moody welding booth
+     Low ambient so the spark PointLight dominates when active.
      ════════════════════════════════════════════════════════ */
   _initLighting() {
     const s = this._scene;
-    s.add(new THREE.AmbientLight(0x6070c0, 0.90));
 
-    const sun = new THREE.DirectionalLight(0xffffff, 1.20);
-    sun.position.set(2.0, 3.5, 1.8);
+    // Very dim ambient — booth feels dark until spark ignites
+    s.add(new THREE.AmbientLight(0x304060, 0.45));
+
+    // Single overhead — dim blue-white, casts shadows
+    const sun = new THREE.DirectionalLight(0xb0c0e0, 0.65);
+    sun.position.set(0.5, 4.0, 0.5);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.bias = -0.0004;
+    sun.shadow.bias = -0.0003;
     sun.shadow.camera.near = 0.1;
-    sun.shadow.camera.far = 10;
-    sun.shadow.camera.top = sun.shadow.camera.right = 2;
-    sun.shadow.camera.bottom = sun.shadow.camera.left = -2;
+    sun.shadow.camera.far = 12;
+    sun.shadow.camera.top = sun.shadow.camera.right = 2.5;
+    sun.shadow.camera.bottom = sun.shadow.camera.left = -2.5;
     s.add(sun);
 
-    const fill = new THREE.DirectionalLight(0xffa060, 0.55);
-    fill.position.set(-2, 1.5, -0.5);
-    s.add(fill);
-
-    const rim = new THREE.DirectionalLight(0x4080ff, 0.35);
-    rim.position.set(-0.5, 0.5, -2);
+    // Cool rim from behind — silhouette the robot
+    const rim = new THREE.DirectionalLight(0x304080, 0.30);
+    rim.position.set(-1, 1.5, -2);
     s.add(rim);
+
+    // Faint warm ground bounce
+    const bounce = new THREE.DirectionalLight(0x503020, 0.15);
+    bounce.position.set(0, -0.5, 0);
+    s.add(bounce);
   }
 
   /* ════════════════════════════════════════════════════════
-     PBR Materials — identical to SCARA Studio
+     PBR Materials
      ════════════════════════════════════════════════════════ */
   _initMaterials() {
     this._mBase = new THREE.MeshPhysicalMaterial({
@@ -140,56 +147,223 @@ export class WelderSceneManager {
   }
 
   /* ════════════════════════════════════════════════════════
-     Environment — Floor, Table, Grid (matched to SCARA)
+     Environment — Industrial Welding Booth
+
+     CRITICAL: Welding table surface at Y ≈ 0.0 (same as old table)
+     so WeldingTask.js seam coordinates remain valid.
      ════════════════════════════════════════════════════════ */
   _initEnvironment() {
     const s = this._scene;
 
-    // Floor
-    const floorG = new THREE.PlaneGeometry(5, 5);
+    // ── 1. Heavy concrete floor with diamond-plate look ──
+    const floorMat = new THREE.MeshPhysicalMaterial({
+      color: 0x14161c, roughness: 0.82, metalness: 0.20,
+      clearcoat: 0.15, clearcoatRoughness: 0.7,
+    });
+    const floorG = new THREE.PlaneGeometry(8, 8);
     floorG.rotateX(-Math.PI / 2);
-    const floor = new THREE.Mesh(floorG, new THREE.MeshStandardMaterial({ color: 0x0b0b18, roughness: 0.98 }));
+    const floor = new THREE.Mesh(floorG, floorMat);
     floor.position.y = -0.76;
     floor.receiveShadow = true;
     s.add(floor);
-    const floorGrid = new THREE.GridHelper(4, 32, 0x18182a, 0x10101e);
+
+    // Floor grid — very subtle, dark industrial
+    const floorGrid = new THREE.GridHelper(6, 48, 0x161a24, 0x101418);
     floorGrid.position.y = -0.756;
     s.add(floorGrid);
 
-    // Wooden Table
-    const tblMat = new THREE.MeshStandardMaterial({ color: 0x5A3418, roughness: 0.68, metalness: 0.05 });
-    const tblTop = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.04, 0.75), tblMat);
-    tblTop.position.set(0.35, -0.02, 0);
+    // ── 2. Hazard floor markings (yellow/black safety stripes) ──
+    const hazardMat = new THREE.MeshStandardMaterial({
+      color: 0xcc9900, roughness: 0.85, metalness: 0.05,
+      transparent: true, opacity: 0.20
+    });
+    const hazardZone = new THREE.Mesh(
+      new THREE.RingGeometry(0.55, 0.58, 64),
+      hazardMat
+    );
+    hazardZone.rotation.x = -Math.PI / 2;
+    hazardZone.position.y = -0.754;
+    s.add(hazardZone);
+
+    // ── 3. Heavy-duty welding pedestal (robot base mount) ──
+    const pedestalMat = new THREE.MeshPhysicalMaterial({
+      color: 0x22252e, roughness: 0.40, metalness: 0.92,
+      clearcoat: 0.3, clearcoatRoughness: 0.4, envMapIntensity: 1.2
+    });
+    // Top plate — Y top face ≈ 0.0
+    const pedTop = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.11, 0.11, 0.04, 32),
+      pedestalMat
+    );
+    pedTop.position.set(0, -0.02, 0);
+    pedTop.castShadow = pedTop.receiveShadow = true;
+    s.add(pedTop);
+
+    // Pedestal column — reinforced steel
+    const pedCol = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.065, 0.085, 0.70, 24),
+      pedestalMat
+    );
+    pedCol.position.set(0, -0.39, 0);
+    pedCol.castShadow = true;
+    s.add(pedCol);
+
+    // Floor mount plate
+    const pedBase = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.13, 0.14, 0.02, 32),
+      pedestalMat
+    );
+    pedBase.position.set(0, -0.75, 0);
+    pedBase.receiveShadow = true;
+    s.add(pedBase);
+
+    // Accent ring
+    const accentMat = new THREE.MeshPhysicalMaterial({
+      color: 0xC8A200, roughness: 0.05, metalness: 0.95,
+      clearcoat: 1.0, envMapIntensity: 2.0
+    });
+    const pedRing = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.004, 8, 48), accentMat);
+    pedRing.rotation.x = Math.PI / 2;
+    pedRing.position.set(0, 0.0, 0);
+    s.add(pedRing);
+
+    // ── 4. Heavy-duty welding table (thick steel slab) ──
+    const TBL_CX = 0.45, TBL_CZ = 0.0;
+    const TBL_W = 0.60, TBL_D = 0.50;
+    const TBL_SURFACE_Y = -0.02; // matches old table top
+
+    const tblMat = new THREE.MeshPhysicalMaterial({
+      color: 0x2a2d35, roughness: 0.50, metalness: 0.88,
+      clearcoat: 0.2, envMapIntensity: 1.0
+    });
+    const tblTop = new THREE.Mesh(
+      new THREE.BoxGeometry(TBL_W, 0.05, TBL_D),
+      tblMat
+    );
+    tblTop.position.set(TBL_CX, TBL_SURFACE_Y, TBL_CZ);
     tblTop.castShadow = tblTop.receiveShadow = true;
     s.add(tblTop);
     this._table = tblTop;
 
-    // Table trim
-    const trimM = new THREE.MeshStandardMaterial({ color: 0xA07820, roughness: 0.25, metalness: 0.60 });
-    s.add(new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.005, 0.005), trimM)).position.set(0.35, -0.0025, 0.375);
-
-    // Table legs
-    const legMat = new THREE.MeshStandardMaterial({ color: 0x381E0C, roughness: 0.80, metalness: 0.04 });
-    [[-0.14, 0.32], [-0.14, -0.32], [0.84, 0.32], [0.84, -0.32]].forEach(([x, z]) => {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.72, 0.05), legMat);
-      leg.position.set(x, -0.40, z);
-      leg.castShadow = leg.receiveShadow = true;
-      s.add(leg);
+    // Table edge trim — bright accent
+    const trimMat = new THREE.MeshPhysicalMaterial({
+      color: 0x8090a0, roughness: 0.15, metalness: 0.95,
+      clearcoat: 0.6, envMapIntensity: 1.4
+    });
+    // Front and back edges
+    [-1, 1].forEach(side => {
+      const trim = new THREE.Mesh(
+        new THREE.BoxGeometry(TBL_W, 0.008, 0.008),
+        trimMat
+      );
+      trim.position.set(TBL_CX, TBL_SURFACE_Y + 0.025, TBL_CZ + side * (TBL_D / 2));
+      s.add(trim);
     });
 
-    // Table grid
-    const tGrid = new THREE.GridHelper(1.0, 20, 0x7A5030, 0x5A3818);
-    tGrid.position.set(0.35, 0.001, 0);
+    // Table legs — thick industrial steel
+    const tLegMat = new THREE.MeshPhysicalMaterial({
+      color: 0x2a2d35, roughness: 0.50, metalness: 0.85,
+      envMapIntensity: 0.8
+    });
+    [
+      [TBL_CX - TBL_W/2 + 0.04, TBL_CZ - TBL_D/2 + 0.04],
+      [TBL_CX - TBL_W/2 + 0.04, TBL_CZ + TBL_D/2 - 0.04],
+      [TBL_CX + TBL_W/2 - 0.04, TBL_CZ - TBL_D/2 + 0.04],
+      [TBL_CX + TBL_W/2 - 0.04, TBL_CZ + TBL_D/2 - 0.04],
+    ].forEach(([x, z]) => {
+      const leg = new THREE.Mesh(
+        new THREE.BoxGeometry(0.04, 0.70, 0.04),
+        tLegMat
+      );
+      leg.position.set(x, TBL_SURFACE_Y - 0.375, z);
+      leg.castShadow = leg.receiveShadow = true;
+      s.add(leg);
+      // Foot pads
+      const foot = new THREE.Mesh(
+        new THREE.BoxGeometry(0.06, 0.01, 0.06),
+        tLegMat
+      );
+      foot.position.set(x, -0.755, z);
+      foot.receiveShadow = true;
+      s.add(foot);
+    });
+
+    // Table surface grid
+    const tGrid = new THREE.GridHelper(0.5, 10, 0x3a3f4a, 0x2a2e38);
+    tGrid.position.set(TBL_CX, TBL_SURFACE_Y + 0.026, TBL_CZ);
     s.add(tGrid);
 
-    // Weld seam outline on the table (visual guide)
-    // DH weld corners → Three.js: (dhX, dhZ, -dhY)
+    // ── 5. Safety screens / blast shields ──
+    const screenMat = new THREE.MeshPhysicalMaterial({
+      color: 0x0a1020,
+      roughness: 0.6, metalness: 0.3,
+      transparent: true, opacity: 0.35,
+      side: THREE.DoubleSide,
+    });
+    const screenFrameMat = new THREE.MeshPhysicalMaterial({
+      color: 0x3a3d48, roughness: 0.35, metalness: 0.90,
+      envMapIntensity: 1.0
+    });
+
+    // Back screen
+    const backScreen = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.6, 1.2),
+      screenMat
+    );
+    backScreen.position.set(0.3, -0.16, -0.55);
+    backScreen.receiveShadow = true;
+    s.add(backScreen);
+    // Back screen frame (top rail)
+    const bsFrame = new THREE.Mesh(
+      new THREE.BoxGeometry(1.65, 0.025, 0.025),
+      screenFrameMat
+    );
+    bsFrame.position.set(0.3, 0.44, -0.55);
+    bsFrame.castShadow = true;
+    s.add(bsFrame);
+    // Back screen frame (bottom rail)
+    const bsFrameB = new THREE.Mesh(
+      new THREE.BoxGeometry(1.65, 0.025, 0.025),
+      screenFrameMat
+    );
+    bsFrameB.position.set(0.3, -0.76, -0.55);
+    s.add(bsFrameB);
+    // Back screen vertical posts
+    [-1, 1].forEach(side => {
+      const post = new THREE.Mesh(
+        new THREE.BoxGeometry(0.025, 1.25, 0.025),
+        screenFrameMat
+      );
+      post.position.set(0.3 + side * 0.82, -0.16, -0.55);
+      post.castShadow = true;
+      s.add(post);
+    });
+
+    // Side screen (right)
+    const sideScreen = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.8, 1.2),
+      screenMat
+    );
+    sideScreen.position.set(1.1, -0.16, -0.15);
+    sideScreen.rotation.y = Math.PI / 2;
+    sideScreen.receiveShadow = true;
+    s.add(sideScreen);
+    // Side screen frame
+    const ssFrame = new THREE.Mesh(
+      new THREE.BoxGeometry(0.025, 1.25, 0.025),
+      screenFrameMat
+    );
+    ssFrame.position.set(1.1, -0.16, -0.55);
+    ssFrame.castShadow = true;
+    s.add(ssFrame);
+
+    // ── 6. Weld seam outline on table (visual guide) ──
     const seamPts = [
-      V3(0.35, 0.05, 0.15),   // corner 0
-      V3(0.55, 0.05, 0.15),   // corner 1
-      V3(0.55, 0.05, -0.15),  // corner 2
-      V3(0.35, 0.05, -0.15),  // corner 3
-      V3(0.35, 0.05, 0.15),   // close
+      V3(0.35, 0.05, 0.15),
+      V3(0.55, 0.05, 0.15),
+      V3(0.55, 0.05, -0.15),
+      V3(0.35, 0.05, -0.15),
+      V3(0.35, 0.05, 0.15),
     ];
     const seamGeo = new THREE.BufferGeometry().setFromPoints(seamPts);
     const seamLine = new THREE.Line(seamGeo, new THREE.LineDashedMaterial({

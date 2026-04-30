@@ -25,8 +25,8 @@ export default class ScaraSceneManager {
 
     // ── Scene ──
     this._scene = new THREE.Scene();
-    this._scene.background = new THREE.Color(0x070710);
-    this._scene.fog = new THREE.Fog(0x070710, 2.5, 5.0);
+    this._scene.background = new THREE.Color(0x0a0c12);
+    this._scene.fog = new THREE.Fog(0x0a0c12, 3.5, 7.0);
 
     // ── Camera ──
     this._camera = new THREE.PerspectiveCamera(50, wrap.clientWidth / wrap.clientHeight, 0.01, 10);
@@ -39,7 +39,7 @@ export default class ScaraSceneManager {
     this._renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this._renderer.setSize(wrap.clientWidth, wrap.clientHeight);
     this._renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this._renderer.toneMappingExposure = 1.3;
+    this._renderer.toneMappingExposure = 1.1;
     wrap.insertBefore(this._renderer.domElement, wrap.firstChild);
 
     // ── Environment map ──
@@ -48,11 +48,14 @@ export default class ScaraSceneManager {
     const envScene = new THREE.Scene();
     envScene.add(new THREE.Mesh(
       new THREE.BoxGeometry(100, 100, 100),
-      new THREE.MeshBasicMaterial({ color: 0x050510, side: THREE.BackSide })
+      new THREE.MeshBasicMaterial({ color: 0x080a14, side: THREE.BackSide })
     ));
-    const envL = new THREE.RectAreaLight(0xffffff, 5, 10, 10);
-    envL.position.set(5, 10, 5); envL.lookAt(0, 0, 0);
-    envScene.add(envL);
+    // Factory ceiling panels — multiple white rects for even industrial fill
+    [[-3,12,0],[3,12,0],[0,12,4],[0,12,-4]].forEach(([x,y,z]) => {
+      const rl = new THREE.RectAreaLight(0xe8f0ff, 4, 8, 8);
+      rl.position.set(x, y, z); rl.lookAt(0, 0, 0);
+      envScene.add(rl);
+    });
     this._scene.environment = pmrem.fromScene(envScene).texture;
 
     // ── OrbitControls ──
@@ -87,30 +90,40 @@ export default class ScaraSceneManager {
   }
 
   /* ════════════════════════════════════════════════════════
-     Lighting
+     Lighting — Cool industrial factory look
      ════════════════════════════════════════════════════════ */
   _initLighting() {
     const s = this._scene;
-    s.add(new THREE.AmbientLight(0x6070c0, 0.90));
 
-    const sun = new THREE.DirectionalLight(0xffffff, 1.20);
-    sun.position.set(2.0, 3.5, 1.8);
+    // Ambient — cool blue-white factory ambience
+    s.add(new THREE.AmbientLight(0x8090c8, 0.75));
+
+    // Main overhead — bright clinical white, slight blue tint
+    const sun = new THREE.DirectionalLight(0xe0ecff, 1.4);
+    sun.position.set(1.5, 4.0, 1.0);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.bias = -0.0004;
+    sun.shadow.bias = -0.0003;
     sun.shadow.camera.near = 0.1;
-    sun.shadow.camera.far = 10;
-    sun.shadow.camera.top = sun.shadow.camera.right = 2;
-    sun.shadow.camera.bottom = sun.shadow.camera.left = -2;
+    sun.shadow.camera.far = 12;
+    sun.shadow.camera.top = sun.shadow.camera.right = 2.5;
+    sun.shadow.camera.bottom = sun.shadow.camera.left = -2.5;
     s.add(sun);
 
-    const fill = new THREE.DirectionalLight(0xffa060, 0.55);
-    fill.position.set(-2, 1.5, -0.5);
+    // Second overhead panel — opposite side for even fill
+    const sun2 = new THREE.DirectionalLight(0xd8e4ff, 0.8);
+    sun2.position.set(-1.5, 3.5, -1.0);
+    s.add(sun2);
+
+    // Cool fill — simulates reflected factory floor light
+    const fill = new THREE.DirectionalLight(0x90b0d0, 0.4);
+    fill.position.set(-2, 1.0, 0.5);
     s.add(fill);
 
-    const rim = new THREE.DirectionalLight(0x4080ff, 0.35);
-    rim.position.set(-0.5, 0.5, -2);
-    s.add(rim);
+    // Subtle warm accent (safety indicator vibe)
+    const accent = new THREE.DirectionalLight(0xffcc44, 0.15);
+    accent.position.set(0.5, 0.5, -2);
+    s.add(accent);
   }
 
   /* ════════════════════════════════════════════════════════
@@ -150,47 +163,219 @@ export default class ScaraSceneManager {
   }
 
   /* ════════════════════════════════════════════════════════
-     Environment (Floor, Table, Reachability)
+     Environment — Industrial Factory: Floor, Pedestal, Conveyor
+
+     CRITICAL: The old table top was at Y ≈ 0.0.
+     The conveyor belt surface is also at Y ≈ 0.0 so the
+     PickAndPlace state machine's graspZ / safeZ remain valid.
      ════════════════════════════════════════════════════════ */
   _initEnvironment() {
     const s = this._scene;
 
-    // Floor
-    const floorG = new THREE.PlaneGeometry(5, 5);
+    // ── 1. Polished concrete factory floor ──
+    const floorMat = new THREE.MeshPhysicalMaterial({
+      color: 0x1a1d24, roughness: 0.75, metalness: 0.15,
+      clearcoat: 0.25, clearcoatRoughness: 0.6,
+    });
+    const floorG = new THREE.PlaneGeometry(8, 8);
     floorG.rotateX(-Math.PI / 2);
-    const floor = new THREE.Mesh(floorG, new THREE.MeshStandardMaterial({ color: 0x0b0b18, roughness: 0.98 }));
+    const floor = new THREE.Mesh(floorG, floorMat);
     floor.position.y = -0.76;
     floor.receiveShadow = true;
     s.add(floor);
-    const floorGrid = new THREE.GridHelper(4, 32, 0x18182a, 0x10101e);
+
+    // Floor grid — subtle cyan-tinted industrial lines
+    const floorGrid = new THREE.GridHelper(6, 48, 0x1a2838, 0x141c28);
     floorGrid.position.y = -0.756;
     s.add(floorGrid);
 
-    // Table
-    const tblMat = new THREE.MeshStandardMaterial({ color: 0x5A3418, roughness: 0.68, metalness: 0.05 });
-    const tblTop = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.04, 0.75), tblMat);
-    tblTop.position.set(0.35, -0.02, 0);
-    tblTop.castShadow = tblTop.receiveShadow = true;
-    s.add(tblTop);
+    // ── 2. Hazard floor markings (yellow safety stripes around robot base) ──
+    const hazardMat = new THREE.MeshStandardMaterial({
+      color: 0xccaa00, roughness: 0.85, metalness: 0.05,
+      transparent: true, opacity: 0.25
+    });
+    // Rectangular safety zone on floor
+    const hazardZone = new THREE.Mesh(
+      new THREE.RingGeometry(0.65, 0.68, 64),
+      hazardMat
+    );
+    hazardZone.rotation.x = -Math.PI / 2;
+    hazardZone.position.y = -0.754;
+    s.add(hazardZone);
 
-    const trimM = new THREE.MeshStandardMaterial({ color: 0xA07820, roughness: 0.25, metalness: 0.60 });
-    s.add(new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.005, 0.005), trimM)).position.set(0.35, -0.0025, 0.375);
+    // ── 3. Industrial pedestal (replaces table under robot base) ──
+    // Top cap — heavy steel plate, Y top face ≈ 0.0
+    const pedestalMat = new THREE.MeshPhysicalMaterial({
+      color: 0x2a2d38, roughness: 0.35, metalness: 0.90,
+      clearcoat: 0.4, clearcoatRoughness: 0.3, envMapIntensity: 1.4
+    });
+    const pedTop = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.12, 0.03, 32),
+      pedestalMat
+    );
+    pedTop.position.set(0, -0.015, 0);
+    pedTop.castShadow = pedTop.receiveShadow = true;
+    s.add(pedTop);
 
-    // Legs
-    const legMat = new THREE.MeshStandardMaterial({ color: 0x381E0C, roughness: 0.80, metalness: 0.04 });
-    [[-0.14, 0.32], [-0.14, -0.32], [0.84, 0.32], [0.84, -0.32]].forEach(([x, z]) => {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.72, 0.05), legMat);
-      leg.position.set(x, -0.40, z);
-      leg.castShadow = leg.receiveShadow = true;
-      s.add(leg);
+    // Pedestal column
+    const pedCol = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.07, 0.09, 0.72, 24),
+      pedestalMat
+    );
+    pedCol.position.set(0, -0.39, 0);
+    pedCol.castShadow = true;
+    s.add(pedCol);
+
+    // Pedestal base plate (floor mount)
+    const pedBase = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.14, 0.15, 0.02, 32),
+      pedestalMat
+    );
+    pedBase.position.set(0, -0.75, 0);
+    pedBase.receiveShadow = true;
+    s.add(pedBase);
+
+    // Gold accent ring at pedestal top
+    const pedAccent = new THREE.Mesh(
+      new THREE.TorusGeometry(0.12, 0.004, 8, 48),
+      new THREE.MeshPhysicalMaterial({
+        color: 0xC8A200, roughness: 0.05, metalness: 0.95,
+        clearcoat: 1.0, envMapIntensity: 2.0
+      })
+    );
+    pedAccent.rotation.x = Math.PI / 2;
+    pedAccent.position.set(0, 0.0, 0);
+    s.add(pedAccent);
+
+    // ── 4. Conveyor belt ──
+    // Belt dimensions: extends along X-axis where pick/place targets are
+    const BELT_W = 0.32;   // width (Z-axis)
+    const BELT_L = 1.4;    // length (X-axis)
+    const BELT_H = 0.74;   // total height from floor to belt surface
+    const BELT_CX = 0.40;  // center X
+    const BELT_CZ = 0.0;   // center Z
+    const BELT_SURFACE_Y = -0.02; // top surface ~= old table top
+
+    // Belt frame (main body)
+    const frameMat = new THREE.MeshPhysicalMaterial({
+      color: 0x3a3d48, roughness: 0.4, metalness: 0.85,
+      clearcoat: 0.3, envMapIntensity: 1.2
+    });
+    const frame = new THREE.Mesh(
+      new THREE.BoxGeometry(BELT_L, BELT_H - 0.04, BELT_W - 0.06),
+      frameMat
+    );
+    frame.position.set(BELT_CX, BELT_SURFACE_Y - (BELT_H - 0.04) / 2, BELT_CZ);
+    frame.castShadow = frame.receiveShadow = true;
+    s.add(frame);
+
+    // Belt surface — dark rubber
+    const beltMat = new THREE.MeshPhysicalMaterial({
+      color: 0x1c1c1c, roughness: 0.92, metalness: 0.05,
+      clearcoat: 0.05,
+    });
+    const belt = new THREE.Mesh(
+      new THREE.BoxGeometry(BELT_L - 0.06, 0.018, BELT_W - 0.04),
+      beltMat
+    );
+    belt.position.set(BELT_CX, BELT_SURFACE_Y + 0.009, BELT_CZ);
+    belt.receiveShadow = true;
+    s.add(belt);
+
+    // Belt texture lines (subtle ridges)
+    const ridgeMat = new THREE.MeshStandardMaterial({
+      color: 0x252525, roughness: 0.95, metalness: 0.0,
+    });
+    for (let i = 0; i < 28; i++) {
+      const rx = BELT_CX - (BELT_L - 0.1) / 2 + i * ((BELT_L - 0.1) / 27);
+      const ridge = new THREE.Mesh(
+        new THREE.BoxGeometry(0.003, 0.001, BELT_W - 0.06),
+        ridgeMat
+      );
+      ridge.position.set(rx, BELT_SURFACE_Y + 0.019, BELT_CZ);
+      s.add(ridge);
+    }
+
+    // Side rails — metallic guard rails
+    const railMat = new THREE.MeshPhysicalMaterial({
+      color: 0x5a6070, roughness: 0.2, metalness: 0.92,
+      clearcoat: 0.5, envMapIntensity: 1.6
+    });
+    [-1, 1].forEach(side => {
+      const rail = new THREE.Mesh(
+        new THREE.BoxGeometry(BELT_L, 0.04, 0.02),
+        railMat
+      );
+      rail.position.set(BELT_CX, BELT_SURFACE_Y + 0.02, BELT_CZ + side * (BELT_W / 2));
+      rail.castShadow = true;
+      s.add(rail);
     });
 
-    // Table grid
-    const tGrid = new THREE.GridHelper(1.0, 20, 0x7A5030, 0x5A3818);
-    tGrid.position.set(0.35, 0.001, 0);
-    s.add(tGrid);
+    // End rollers — cylindrical drums at each end
+    const rollerMat = new THREE.MeshPhysicalMaterial({
+      color: 0x6a6d78, roughness: 0.25, metalness: 0.88,
+      envMapIntensity: 1.0
+    });
+    [-1, 1].forEach(end => {
+      const roller = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.035, 0.035, BELT_W + 0.02, 20),
+        rollerMat
+      );
+      roller.rotation.x = Math.PI / 2;
+      roller.position.set(
+        BELT_CX + end * (BELT_L / 2 - 0.02),
+        BELT_SURFACE_Y + 0.01,
+        BELT_CZ
+      );
+      roller.castShadow = true;
+      s.add(roller);
 
-    // Reachability ring (SCARA works in horizontal plane)
+      // Roller end caps
+      [-1, 1].forEach(capSide => {
+        const cap = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.04, 0.04, 0.01, 16),
+          railMat
+        );
+        cap.rotation.x = Math.PI / 2;
+        cap.position.set(
+          BELT_CX + end * (BELT_L / 2 - 0.02),
+          BELT_SURFACE_Y + 0.01,
+          BELT_CZ + capSide * (BELT_W / 2 + 0.01)
+        );
+        s.add(cap);
+      });
+    });
+
+    // Conveyor support legs
+    const legMat = new THREE.MeshPhysicalMaterial({
+      color: 0x3a3d48, roughness: 0.45, metalness: 0.85,
+      envMapIntensity: 1.0
+    });
+    [[-0.30, -0.12], [-0.30, 0.12], [1.10, -0.12], [1.10, 0.12]].forEach(([x, z]) => {
+      const leg = new THREE.Mesh(
+        new THREE.BoxGeometry(0.035, BELT_H - 0.04, 0.035),
+        legMat
+      );
+      leg.position.set(x, BELT_SURFACE_Y - (BELT_H - 0.04) / 2, z);
+      leg.castShadow = leg.receiveShadow = true;
+      s.add(leg);
+
+      // Foot pads
+      const foot = new THREE.Mesh(
+        new THREE.BoxGeometry(0.05, 0.01, 0.05),
+        legMat
+      );
+      foot.position.set(x, -0.755, z);
+      foot.receiveShadow = true;
+      s.add(foot);
+    });
+
+    // ── 5. Conveyor surface grid (replaces old table grid) ──
+    const convGrid = new THREE.GridHelper(1.2, 24, 0x303540, 0x252830);
+    convGrid.position.set(BELT_CX, BELT_SURFACE_Y + 0.02, BELT_CZ);
+    s.add(convGrid);
+
+    // ── 6. Reachability ring (SCARA workspace annulus) ──
     const rMax = L1 + L2;
     const rMin = Math.abs(L1 - L2);
     const reachOuter = new THREE.RingGeometry(rMin, rMax, 64);

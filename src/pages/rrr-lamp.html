@@ -98,21 +98,21 @@
           <div class="sec">Analytical Jacobian J(q) — 3×3</div>
           <div style="font-size:10px;color:var(--muted)">ṗ = J(q) q̇ &nbsp;·&nbsp; colors: <span
               style="color:#40b870">pos</span> / <span style="color:#e05050">neg</span> / <span
-              style="color:var(--muted)">≈0</span></div>
+              style="color:var(--muted)">≈0</span> &nbsp;·&nbsp; rows: <span style="color:var(--axis-x)">X</span> <span style="color:var(--axis-y)">Y</span> <span style="color:var(--axis-z)">Z</span></div>
           <div class="jgrid">
             <div></div>
             <div class="jh">∂/∂θ₁</div><div class="jh">∂/∂θ₂</div><div class="jh">∂/∂θ₃</div>
-            <div class="jrow-lbl">ẋ</div><div class="jc" id="j11">—</div><div class="jc" id="j12">—</div><div class="jc" id="j13">—</div>
-            <div class="jrow-lbl">ẏ</div><div class="jc" id="j21">—</div><div class="jc" id="j22">—</div><div class="jc" id="j23">—</div>
-            <div class="jrow-lbl">ż</div><div class="jc" id="j31">—</div><div class="jc" id="j32">—</div><div class="jc" id="j33">—</div>
+            <div class="jrow-lbl axis-x">ẋ</div><div class="jc jc-x" id="j11">—</div><div class="jc jc-x" id="j12">—</div><div class="jc jc-x" id="j13">—</div>
+            <div class="jrow-lbl axis-y">ẏ</div><div class="jc jc-y" id="j21">—</div><div class="jc jc-y" id="j22">—</div><div class="jc jc-y" id="j23">—</div>
+            <div class="jrow-lbl axis-z">ż</div><div class="jc jc-z" id="j31">—</div><div class="jc jc-z" id="j32">—</div><div class="jc jc-z" id="j33">—</div>
           </div>
 
           <div class="sec">Metrics</div>
           <div class="cards">
-            <div class="card"><div class="cl">det J</div><div class="cv" id="detJ">—</div></div>
-            <div class="card"><div class="cl">Manipulability μ</div><div class="cv" id="jmu">—</div></div>
-            <div class="card"><div class="cl">sin θ₃</div><div class="cv" id="sinT3">—</div></div>
-            <div class="card"><div class="cl">Reach r</div><div class="cv" id="jreach">—</div></div>
+            <div class="card has-tooltip" data-tooltip="Determinant of the Jacobian matrix. Zero = singularity."><div class="cl">det J</div><div class="cv" id="detJ">—</div></div>
+            <div class="card has-tooltip" data-tooltip="Manipulability index μ = |det(J)|. Higher = more dexterous."><div class="cl">Manipulability μ</div><div class="cv" id="jmu">—</div></div>
+            <div class="card has-tooltip" data-tooltip="sin(θ₃) → 0 means elbow singularity (fully extended/folded)."><div class="cl">sin θ₃</div><div class="cv" id="sinT3">—</div></div>
+            <div class="card has-tooltip" data-tooltip="Horizontal reach distance r = √(x² + y²) from base."><div class="cl">Reach r</div><div class="cv" id="jreach">—</div></div>
           </div>
 
           <div class="sec">Manipulability Index</div>
@@ -237,10 +237,10 @@
         <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">
           <div class="sec">End-Effector Position (FK)</div>
           <div class="cards">
-            <div class="card"><div class="cl">x (m)</div><div class="cv" id="ox">—</div></div>
-            <div class="card"><div class="cl">y (m)</div><div class="cv" id="oy">—</div></div>
-            <div class="card"><div class="cl">z (m)</div><div class="cv" id="oz">—</div></div>
-            <div class="card"><div class="cl">r (m)</div><div class="cv" id="or_">—</div></div>
+            <div class="card axis-x"><div class="cl">x (m)</div><div class="cv" id="ox">—</div></div>
+            <div class="card axis-y"><div class="cl">y (m)</div><div class="cv" id="oy">—</div></div>
+            <div class="card axis-z"><div class="cl">z (m)</div><div class="cv" id="oz">—</div></div>
+            <div class="card has-tooltip" data-tooltip="Horizontal reach r = √(x² + y²)"><div class="cl">r (m)</div><div class="cv" id="or_">—</div></div>
           </div>
         </div>
 

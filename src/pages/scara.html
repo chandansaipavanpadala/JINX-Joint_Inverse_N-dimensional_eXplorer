@@ -63,9 +63,9 @@
 
           <div class="sec">FK End-Effector Position</div>
           <div class="cards">
-            <div class="card"><div class="cl">x (m)</div><div class="cv" id="fk-ox">—</div></div>
-            <div class="card"><div class="cl">y (m)</div><div class="cv" id="fk-oy">—</div></div>
-            <div class="card"><div class="cl">z (m)</div><div class="cv" id="fk-oz">—</div></div>
+            <div class="card axis-x"><div class="cl">x (m)</div><div class="cv" id="fk-ox">—</div></div>
+            <div class="card axis-y"><div class="cl">y (m)</div><div class="cv" id="fk-oy">—</div></div>
+            <div class="card axis-z"><div class="cl">z (m)</div><div class="cv" id="fk-oz">—</div></div>
           </div>
         </div>
 
@@ -106,13 +106,13 @@
           <div class="sec">Geometric Jacobian Jv(q) — 3×4 (linear velocity)</div>
           <div style="font-size:10px;color:var(--muted)">ṗ = Jv(q) q̇ &nbsp;·&nbsp; colors: <span
               style="color:#40b870">pos</span> / <span style="color:#e05050">neg</span> / <span
-              style="color:var(--muted)">≈0</span></div>
+              style="color:var(--muted)">≈0</span> &nbsp;·&nbsp; rows: <span style="color:var(--axis-x)">X</span> <span style="color:var(--axis-y)">Y</span> <span style="color:var(--axis-z)">Z</span></div>
           <div class="jgrid jgrid-4">
             <div></div>
             <div class="jh">∂/∂θ₁</div><div class="jh">∂/∂θ₂</div><div class="jh">∂/∂d₃</div><div class="jh">∂/∂θ₄</div>
-            <div class="jrow-lbl">ẋ</div><div class="jc" id="j11">—</div><div class="jc" id="j12">—</div><div class="jc" id="j13">—</div><div class="jc" id="j14">—</div>
-            <div class="jrow-lbl">ẏ</div><div class="jc" id="j21">—</div><div class="jc" id="j22">—</div><div class="jc" id="j23">—</div><div class="jc" id="j24">—</div>
-            <div class="jrow-lbl">ż</div><div class="jc" id="j31">—</div><div class="jc" id="j32">—</div><div class="jc" id="j33">—</div><div class="jc" id="j34">—</div>
+            <div class="jrow-lbl axis-x">ẋ</div><div class="jc jc-x" id="j11">—</div><div class="jc jc-x" id="j12">—</div><div class="jc jc-x" id="j13">—</div><div class="jc jc-x" id="j14">—</div>
+            <div class="jrow-lbl axis-y">ẏ</div><div class="jc jc-y" id="j21">—</div><div class="jc jc-y" id="j22">—</div><div class="jc jc-y" id="j23">—</div><div class="jc jc-y" id="j24">—</div>
+            <div class="jrow-lbl axis-z">ż</div><div class="jc jc-z" id="j31">—</div><div class="jc jc-z" id="j32">—</div><div class="jc jc-z" id="j33">—</div><div class="jc jc-z" id="j34">—</div>
           </div>
 
           <div class="sec">Joint Sliders (drives Jacobian)</div>
@@ -142,6 +142,7 @@
           </div>
 
           <button class="sbtn" id="taskBtn">▶  Start Pick & Place</button>
+          <button class="sbtn" id="analyticsBtn" style="background:linear-gradient(135deg,#6c5ce7,#a855f7);color:#fff;box-shadow:0 4px 15px rgba(108,92,231,0.3);margin-top:6px">📈  Open Analytics</button>
           <div id="clickHint" class="info-box" style="display:none;margin-top:4px">
             <b style="color:var(--cyan)">Click 1:</b> Click on table to place payload.<br>
             <b style="color:var(--accent)">Click 2:</b> Click on table to set drop zone.
@@ -181,9 +182,9 @@
         <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">
           <div class="sec">End-Effector Position (FK)</div>
           <div class="cards">
-            <div class="card"><div class="cl">x (m)</div><div class="cv" id="ox">—</div></div>
-            <div class="card"><div class="cl">y (m)</div><div class="cv" id="oy">—</div></div>
-            <div class="card"><div class="cl">z (m)</div><div class="cv" id="oz">—</div></div>
+            <div class="card axis-x"><div class="cl">x (m)</div><div class="cv" id="ox">—</div></div>
+            <div class="card axis-y"><div class="cl">y (m)</div><div class="cv" id="oy">—</div></div>
+            <div class="card axis-z"><div class="cl">z (m)</div><div class="cv" id="oz">—</div></div>
           </div>
         </div>
 

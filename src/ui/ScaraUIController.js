@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { ik_dls, fk, jacobian, SCARA_DH_CONFIG } from '../math/KinematicsNDOF.js';
 import PickAndPlaceStateMachine, { STATE, STATE_META } from '../logic/PickAndPlace.js';
+import AnalyticsPanel from './AnalyticsPanel.js';
 
 const $ = id => document.getElementById(id);
 const DEG = v => v * Math.PI / 180;
@@ -34,6 +35,9 @@ export default class ScaraUIController {
 
     // Interactive click state
     this._interactiveClickPhase = 0; // 0=none, 1=waiting pick, 2=waiting drop
+
+    // Analytics panel (lazy-mounted)
+    this._analytics = null;
 
     this._bindEvents();
   }
@@ -76,6 +80,10 @@ export default class ScaraUIController {
     // Reset button
     const resetBtn = $('resetBtn');
     if (resetBtn) resetBtn.addEventListener('click', () => this._resetPose());
+
+    // Analytics button
+    const analyticsBtn = $('analyticsBtn');
+    if (analyticsBtn) analyticsBtn.addEventListener('click', () => this._toggleAnalytics());
   }
 
   /* ═══════════ Tabs ═══════════ */
@@ -310,6 +318,7 @@ export default class ScaraUIController {
       // Start
       this.sm.resetTrail();
       this._pnp.setInitialQ([...this.q]);
+      if (this._analytics) this._analytics.reset();
 
       if (mode === 'interactive') {
         this._pnp.startInteractive();
@@ -402,6 +411,27 @@ export default class ScaraUIController {
     $('hStat').textContent = info.state;
     $('hStat').className = 'ok';
     $('hErr').textContent = info.error.toExponential(2) + ' m';
+
+    // ── Analytics feed ──
+    if (this._analytics && this._analytics.isVisible) {
+      const { position: actualPos } = fk(this.q, SCARA_DH_CONFIG);
+      const jac = jacobian(this.q, SCARA_DH_CONFIG);
+      const n = jac.cols;
+      // Compute manipulability: μ = √(det(J·Jᵀ)) for 3×n linear Jacobian
+      const JJt = new Float64Array(9);
+      for (let i = 0; i < 3; i++)
+        for (let j = 0; j < 3; j++) {
+          let sum = 0;
+          for (let k = 0; k < n; k++) sum += jac.J[i * n + k] * jac.J[j * n + k];
+          JJt[i * 3 + j] = sum;
+        }
+      const d = JJt[0] * (JJt[4] * JJt[8] - JJt[5] * JJt[7])
+              - JJt[1] * (JJt[3] * JJt[8] - JJt[5] * JJt[6])
+              + JJt[2] * (JJt[3] * JJt[7] - JJt[4] * JJt[6]);
+      const mu = Math.sqrt(Math.max(0, d));
+      const dt = 1 / 60; // approximate frame dt
+      this._analytics.updateData(dt, info.target, actualPos, mu);
+    }
   }
 
   /* ═══════════ Raycaster ═══════════ */
@@ -465,5 +495,17 @@ export default class ScaraUIController {
     this._isDragging = false;
     this.sm.controls.enabled = true;
     document.body.style.cursor = 'default';
+  }
+
+  /* ═══════════ Analytics Panel ═══════════ */
+  _toggleAnalytics() {
+    if (!this._analytics) {
+      this._analytics = new AnalyticsPanel(
+        'SCARA Analytics',
+        document.getElementById('cw'),
+        20, 60
+      );
+    }
+    this._analytics.toggle();
   }
 }

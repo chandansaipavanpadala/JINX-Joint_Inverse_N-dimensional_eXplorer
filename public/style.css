@@ -1,6 +1,7 @@
 /* ============================================================
    JINX — Global Design Tokens & Component Styles
-   Extracted from shadow_lamp_rrr_simulator_v2.html (monolith)
+   v2.0 — UX Overhaul: Axis color-coding, floating panels,
+          improved Jacobian readability, tooltips
    ============================================================ */
 
 :root {
@@ -17,6 +18,17 @@
   --red2: #ff4d4d;
   --accent: #6c5ce7;
   --panel-blur: 18px;
+
+  /* Axis color tokens (XYZ ↔ RGB convention) */
+  --axis-x: #ff5c5c;
+  --axis-x-bg: rgba(255, 92, 92, 0.08);
+  --axis-x-border: rgba(255, 92, 92, 0.35);
+  --axis-y: #4ddf6f;
+  --axis-y-bg: rgba(77, 223, 111, 0.08);
+  --axis-y-border: rgba(77, 223, 111, 0.35);
+  --axis-z: #4da6ff;
+  --axis-z-bg: rgba(77, 166, 255, 0.08);
+  --axis-z-border: rgba(77, 166, 255, 0.35);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -78,7 +90,95 @@ html, body {
   color: rgba(255, 255, 255, 0.25); pointer-events: none; font-weight: 300;
 }
 
-/* Glassmorphism Sidebar Panel */
+/* ============================================================
+   FLOATING PANEL SYSTEM (Draggable Controllers)
+   PDF §4.5 F-5 — "Each controller operates in its own
+   independently resizable floating panel."
+   ============================================================ */
+
+.floating-panel {
+  position: absolute;
+  min-width: 280px;
+  max-width: 420px;
+  background: rgba(10, 10, 22, 0.88);
+  backdrop-filter: blur(22px);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 14px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.55), 0 0 1px rgba(255,255,255,0.1);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: box-shadow 0.25s ease;
+  resize: both;
+}
+.floating-panel:hover,
+.floating-panel.fp-active {
+  box-shadow: 0 16px 56px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 204, 0, 0.12);
+}
+.floating-panel.fp-hidden { display: none; }
+
+/* Drag handle / title bar */
+.fp-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--border);
+  cursor: grab; user-select: none;
+}
+.fp-header:active { cursor: grabbing; }
+.fp-header .fp-icon {
+  font-size: 14px; width: 20px; text-align: center; flex-shrink: 0;
+}
+.fp-header .fp-title {
+  flex: 1; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);
+}
+.fp-header .fp-btn {
+  width: 22px; height: 22px; border-radius: 6px; border: none;
+  background: rgba(255, 255, 255, 0.05); color: var(--muted);
+  font-size: 12px; cursor: pointer; display: flex;
+  align-items: center; justify-content: center; transition: all 0.15s;
+  flex-shrink: 0;
+}
+.fp-header .fp-btn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.fp-header .fp-btn.fp-close:hover { background: rgba(255, 77, 77, 0.25); color: var(--red2); }
+
+/* Panel body */
+.fp-body {
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 14px;
+  overflow-y: auto; max-height: 65vh;
+  scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+}
+.fp-body::-webkit-scrollbar { width: 4px; }
+.fp-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+
+/* Collapsed state */
+.floating-panel.fp-collapsed .fp-body { display: none; }
+.floating-panel.fp-collapsed { resize: none; min-width: unset; }
+
+/* Panel toggle toolbar — sits in the header bar */
+.fp-toolbar {
+  display: flex; align-items: center; gap: 4px;
+  margin-left: auto; padding: 0 12px;
+}
+.fp-toolbar-btn {
+  padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03); color: var(--muted);
+  font-size: 10px; font-weight: 600; cursor: pointer;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  transition: all 0.2s; white-space: nowrap;
+}
+.fp-toolbar-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.18); background: rgba(255,255,255,0.06); }
+.fp-toolbar-btn.active {
+  color: var(--gold); border-color: rgba(255, 204, 0, 0.25);
+  background: rgba(255, 204, 0, 0.08);
+}
+
+/* ============================================================
+   Glassmorphism Sidebar Panel (legacy — kept for compat)
+   ============================================================ */
 .panel {
   width: 340px; flex-shrink: 0; border-left: 1px solid var(--border);
   background: var(--bg2); backdrop-filter: blur(var(--panel-blur));
@@ -123,7 +223,9 @@ html, body {
 }
 .sec::after { content: ""; flex: 1; height: 1px; background: var(--border); }
 
-/* Improved Controls */
+/* ============================================================
+   IMPROVED CONTROLS — Better spacing, monospaced values
+   ============================================================ */
 .ctrl { display: flex; flex-direction: column; gap: 6px; }
 .ctrl-row { display: flex; align-items: center; gap: 12px; }
 .ctrl label { font-size: 12px; color: var(--text); flex: 1; font-weight: 400; }
@@ -138,13 +240,15 @@ html, body {
 }
 .ctrl input[type=range]:active::-webkit-slider-thumb { transform: scale(1.2); }
 .val {
-  min-width: 50px; text-align: right; font-size: 11px;
+  min-width: 54px; text-align: right; font-size: 11px;
   font-family: 'JetBrains Mono', monospace; color: var(--gold);
-  font-weight: 600; background: rgba(0, 0, 0, 0.2); padding: 2px 6px;
-  border-radius: 4px;
+  font-weight: 600; background: rgba(0, 0, 0, 0.2); padding: 3px 8px;
+  border-radius: 4px; font-variant-numeric: tabular-nums;
 }
 
-/* Cards */
+/* ============================================================
+   CARDS — with axis color-coding support
+   ============================================================ */
 .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .card {
   background: rgba(0, 0, 0, 0.2); border-radius: 8px; padding: 10px 12px;
@@ -158,11 +262,22 @@ html, body {
 .cv {
   font-size: 13px; font-weight: 600; color: #fff;
   font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
 }
 .cv.ok { color: var(--grn); }
 .cv.warn { color: var(--red2); }
 
-/* Alerts */
+/* Axis-colored cards */
+.card.axis-x { border-left: 3px solid var(--axis-x); background: var(--axis-x-bg); }
+.card.axis-x .cl { color: var(--axis-x); }
+.card.axis-y { border-left: 3px solid var(--axis-y); background: var(--axis-y-bg); }
+.card.axis-y .cl { color: var(--axis-y); }
+.card.axis-z { border-left: 3px solid var(--axis-z); background: var(--axis-z-bg); }
+.card.axis-z .cl { color: var(--axis-z); }
+
+/* ============================================================
+   ALERTS
+   ============================================================ */
 .alert {
   padding: 10px 14px; border-radius: 8px; font-size: 11px;
   background: rgba(255, 77, 77, 0.1); border: 1px solid rgba(255, 77, 77, 0.2);
@@ -181,13 +296,15 @@ html, body {
 }
 .sel {
   width: 100%; padding: 8px 12px; border-radius: 8px; font-size: 12px;
-  background: rgba(15,15,28,0.8); color: var(--text); border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.3); color: var(--text); border: 1px solid var(--border);
   font-family: 'Inter', sans-serif; cursor: pointer; outline: none;
   transition: border-color 0.2s;
 }
 .sel:hover, .sel:focus { border-color: var(--cyan); }
 
-/* Table */
+/* ============================================================
+   DH TABLE
+   ============================================================ */
 .dht {
   border-collapse: separate; border-spacing: 0; width: 100%;
   border-radius: 8px; overflow: hidden; border: 1px solid var(--border);
@@ -201,20 +318,86 @@ html, body {
   background: transparent; color: var(--text);
   font-family: 'JetBrains Mono', monospace; font-size: 11px;
   padding: 8px; border-top: 1px solid var(--border); text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
-/* Jacobian Matrix */
-.jgrid { display: grid; grid-template-columns: 24px repeat(3, 1fr); gap: 4px; }
-.jgrid.jgrid-4 { grid-template-columns: 24px repeat(4, 1fr); }
-.jh { font-size: 9px; color: var(--muted); text-align: center; font-weight: 700; padding: 4px 0; }
-.jrow-lbl { font-size: 10px; color: var(--muted); font-weight: 600; display: flex; align-items: center; justify-content: center; }
+/* ============================================================
+   JACOBIAN MATRIX — Axis-colored, readable, padded
+   ============================================================ */
+.jgrid {
+  display: grid; grid-template-columns: 28px repeat(3, 1fr);
+  gap: 5px; padding: 4px 0;
+}
+.jgrid.jgrid-4 { grid-template-columns: 28px repeat(4, 1fr); }
+.jgrid-6 {
+  display: grid;
+  grid-template-columns: 28px repeat(6, 1fr);
+  gap: 4px; padding: 4px 0;
+}
+.jh {
+  font-size: 9px; color: var(--muted); text-align: center;
+  font-weight: 700; padding: 4px 0; letter-spacing: 0.02em;
+}
+.jrow-lbl {
+  font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 4px; padding: 2px;
+}
+/* Axis-colored row labels */
+.jrow-lbl.axis-x { color: var(--axis-x); background: var(--axis-x-bg); }
+.jrow-lbl.axis-y { color: var(--axis-y); background: var(--axis-y-bg); }
+.jrow-lbl.axis-z { color: var(--axis-z); background: var(--axis-z-bg); }
+
 .jc {
   border-radius: 6px; padding: 8px 4px; font-size: 11px;
   font-family: 'JetBrains Mono', monospace; background: rgba(0, 0, 0, 0.2);
   border: 1px solid var(--border); text-align: center;
+  font-variant-numeric: tabular-nums;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+  letter-spacing: -0.02em;
+  min-width: 0;
 }
+/* Axis-tinted Jacobian cells per row */
+.jc.jc-x { border-top: 2px solid var(--axis-x-border); }
+.jc.jc-y { border-top: 2px solid var(--axis-y-border); }
+.jc.jc-z { border-top: 2px solid var(--axis-z-border); }
 
-/* Premium Button */
+/* ============================================================
+   TOOLTIPS — CSS-only, on hover
+   ============================================================ */
+.has-tooltip {
+  position: relative; cursor: help;
+}
+.has-tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute; bottom: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%); padding: 8px 12px;
+  background: rgba(15, 15, 30, 0.95); border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px; font-size: 11px; font-weight: 400;
+  color: var(--text); white-space: nowrap; pointer-events: none;
+  opacity: 0; transition: opacity 0.2s, transform 0.2s;
+  transform: translateX(-50%) translateY(4px);
+  z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  font-family: 'Inter', sans-serif; letter-spacing: 0;
+  text-transform: none;
+}
+.has-tooltip:hover::after {
+  opacity: 1; transform: translateX(-50%) translateY(0);
+}
+/* Tooltip arrow */
+.has-tooltip::before {
+  content: '';
+  position: absolute; bottom: calc(100% + 4px); left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent; border-top-color: rgba(15, 15, 30, 0.95);
+  pointer-events: none; opacity: 0; transition: opacity 0.2s;
+  z-index: 101;
+}
+.has-tooltip:hover::before { opacity: 1; }
+
+/* ============================================================
+   PREMIUM BUTTON
+   ============================================================ */
 .sbtn {
   width: 100%; padding: 12px; border-radius: 10px; border: none;
   cursor: pointer; font-size: 13px; font-weight: 700;
@@ -228,15 +411,6 @@ html, body {
   background: linear-gradient(135deg, #ff4d4d, #c01010); color: #fff;
   box-shadow: 0 4px 15px rgba(255, 77, 77, 0.3);
 }
-
-/* Custom Select */
-.sel {
-  width: 100%; padding: 8px 12px; border-radius: 8px;
-  background: rgba(0, 0, 0, 0.3); color: var(--text);
-  border: 1px solid var(--border); font-size: 12px;
-  cursor: pointer; outline: none; transition: border-color 0.2s;
-}
-.sel:hover { border-color: rgba(255, 255, 255, 0.2); }
 
 /* POV Viewport */
 #camPov {

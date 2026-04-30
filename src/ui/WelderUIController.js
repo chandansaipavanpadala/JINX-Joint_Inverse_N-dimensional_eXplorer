@@ -8,6 +8,7 @@
 
 import { ik_dls, fk, jacobian, WELDING_DH_CONFIG } from '../math/KinematicsNDOF.js';
 import { WeldingStateMachine } from '../logic/WeldingTask.js';
+import AnalyticsPanel from './AnalyticsPanel.js';
 
 const $ = id => document.getElementById(id);
 const RAD = Math.PI / 180;
@@ -36,6 +37,9 @@ export class WelderUIController {
       // Reset trail when starting a new weld
       if (isActive) this.sm.resetTrail();
     };
+
+    // Analytics panel (lazy-mounted)
+    this._analytics = null;
 
     this._bindEvents();
 
@@ -95,6 +99,12 @@ export class WelderUIController {
     if (btnWeld) {
       btnWeld.addEventListener('click', () => this._toggleWelding());
     }
+
+    // Analytics button
+    const analyticsBtn = $('analyticsBtn');
+    if (analyticsBtn) {
+      analyticsBtn.addEventListener('click', () => this._toggleAnalytics());
+    }
   }
 
   /* ═══════════ Toggle Welding Task ═══════════ */
@@ -114,6 +124,7 @@ export class WelderUIController {
       this.stateMachine.start();
       this.isWelding = true;
       if (btn) { btn.textContent = '⏹ Stop Welding'; btn.classList.add('stop'); }
+      if (this._analytics) this._analytics.reset();
       this._lastTime = performance.now();
       this._runTask();
     }
@@ -175,6 +186,25 @@ export class WelderUIController {
     this._updateHUD();
     this._syncSliders();
     this._updateTaskUI();
+
+    // ── 7. Analytics feed ──
+    if (this._analytics && this._analytics.isVisible) {
+      const { position: actualPos } = fk(this.q, WELDING_DH_CONFIG);
+      const jac = jacobian(this.q, WELDING_DH_CONFIG);
+      const n = 6;
+      const JJt = new Float64Array(9);
+      for (let i = 0; i < 3; i++)
+        for (let j = 0; j < 3; j++) {
+          let sum = 0;
+          for (let k = 0; k < n; k++) sum += jac.J[i * n + k] * jac.J[j * n + k];
+          JJt[i * 3 + j] = sum;
+        }
+      const d = JJt[0] * (JJt[4] * JJt[8] - JJt[5] * JJt[7])
+              - JJt[1] * (JJt[3] * JJt[8] - JJt[5] * JJt[6])
+              + JJt[2] * (JJt[3] * JJt[7] - JJt[4] * JJt[6]);
+      const mu = Math.sqrt(Math.max(0, d));
+      this._analytics.updateData(dt, targetXYZ, actualPos, mu);
+    }
 
     // ── Schedule next frame ──
     this._taskRAF = requestAnimationFrame(() => this._runTask());
@@ -289,6 +319,8 @@ export class WelderUIController {
       });
 
       const rowLabels = ['ẋ', 'ẏ', 'ż'];
+      const axisClasses = ['axis-x', 'axis-y', 'axis-z'];
+      const cellAxisClasses = ['jc-x', 'jc-y', 'jc-z'];
 
       // Find max value for color scaling
       let maxVal = 1e-9;
@@ -298,12 +330,12 @@ export class WelderUIController {
 
       for (let r = 0; r < 3; r++) {
         const lbl = document.createElement('div');
-        lbl.className = 'jrow-lbl';
+        lbl.className = 'jrow-lbl ' + axisClasses[r];
         lbl.innerText = rowLabels[r];
         jGrid.appendChild(lbl);
         for (let c = 0; c < 6; c++) {
           const cell = document.createElement('div');
-          cell.className = 'jc';
+          cell.className = 'jc ' + cellAxisClasses[r];
           const v = jac.J[r * n + c];
           const norm = v / maxVal;
           cell.innerText = v.toFixed(3);
@@ -353,5 +385,17 @@ export class WelderUIController {
     this._updateScene();
     this._updateHUD();
     this._syncSliders();
+  }
+
+  /* ═══════════ Analytics Panel ═══════════ */
+  _toggleAnalytics() {
+    if (!this._analytics) {
+      this._analytics = new AnalyticsPanel(
+        'Welder Analytics',
+        document.getElementById('cw'),
+        20, 60
+      );
+    }
+    this._analytics.toggle();
   }
 }
