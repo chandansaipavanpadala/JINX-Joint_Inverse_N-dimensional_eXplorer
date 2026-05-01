@@ -4,11 +4,15 @@
  *
  * Architecture mirrors ScaraUIController:
  *   _runTask() RAF loop → state machine → IK solver → scene update → HUD sync
+ *
+ * Also integrates the generic WaypointTask planner for user-defined paths.
  */
 
-import { ik_dls, fk, jacobian, WELDING_DH_CONFIG } from '../math/KinematicsNDOF.js';
+import { ik_dls, fk, jacobian, calcCartesianVelocity, WELDING_DH_CONFIG } from '../math/KinematicsNDOF.js';
 import { WeldingStateMachine } from '../logic/WeldingTask.js';
+import { WaypointTask } from '../logic/WaypointTask.js';
 import AnalyticsPanel from './AnalyticsPanel.js';
+import WaypointPanel from './WaypointPanel.js';
 
 const $ = id => document.getElementById(id);
 const RAD = Math.PI / 180;
@@ -20,6 +24,7 @@ export class WelderUIController {
 
     // Home pose: Base=0, Shoulder=45°, Elbow=-45°, Roll=0, Pitch=-90°, Tool=0
     this.q = [0, Math.PI / 4, -Math.PI / 4, 0, -Math.PI / 2, 0];
+    this.lastQ = [...this.q]; // Previous frame joint angles for velocity computation
 
     this.stateMachine = new WeldingStateMachine();
     this.isWelding = false;
@@ -40,6 +45,55 @@ export class WelderUIController {
 
     // Analytics panel (lazy-mounted)
     this._analytics = null;
+
+    // ── Waypoint Planner ──
+    this._waypointTask = new WaypointTask();
+    this._waypointRAF = null;
+    this._waypointLastTime = 0;
+    this._isWaypointRunning = false;
+
+    this._waypointTask.onStateChange = (state) => {
+      if (this._waypointPanel) {
+        this._waypointPanel.setPlaying(state === 'RUNNING');
+        if (state === 'COMPLETE' || state === 'IDLE') {
+          this._isWaypointRunning = false;
+          this._refreshWaypointViz();
+        }
+      }
+    };
+
+    this._waypointPanel = new WaypointPanel({
+      mountRoot: document.getElementById('cw'),
+      startX: 20, startY: 420,
+      getEEPos: () => {
+        const { position } = fk(this.q, WELDING_DH_CONFIG);
+        return position;
+      },
+      onPlay: () => this._playWaypoints(),
+      onStop: () => this._stopWaypoints(),
+      onAdd: (wp) => {
+        this._waypointTask.addWaypoint(wp);
+        this._refreshWaypointViz();
+      },
+      onRemove: (i) => {
+        this._waypointTask.removeWaypoint(i);
+        this._refreshWaypointViz();
+      },
+      onMove: (from, to) => {
+        this._waypointTask.moveWaypoint(from, to);
+        this._refreshWaypointViz();
+      },
+      onClear: () => {
+        this._waypointTask.clearWaypoints();
+        this._refreshWaypointViz();
+      },
+      onModeChange: (mode) => {
+        this._waypointTask.mode = mode;
+      },
+    });
+    // Start hidden — toggled from the Tasks tab
+    this._waypointPanel._ensureMounted();
+    this._waypointPanel.hide();
 
     this._bindEvents();
 
@@ -104,6 +158,14 @@ export class WelderUIController {
     const analyticsBtn = $('analyticsBtn');
     if (analyticsBtn) {
       analyticsBtn.addEventListener('click', () => this._toggleAnalytics());
+    }
+
+    // Waypoint planner button
+    const wpBtn = $('btn-waypoints');
+    if (wpBtn) {
+      wpBtn.addEventListener('click', () => {
+        this._waypointPanel.toggle();
+      });
     }
   }
 
@@ -187,11 +249,13 @@ export class WelderUIController {
     this._syncSliders();
     this._updateTaskUI();
 
-    // ── 7. Analytics feed ──
-    if (this._analytics && this._analytics.isVisible) {
+    // ── 7. Analytics feed (velocity + manipulability) ──
+    if (this._analytics) {
       const { position: actualPos } = fk(this.q, WELDING_DH_CONFIG);
       const jac = jacobian(this.q, WELDING_DH_CONFIG);
       const n = 6;
+
+      // Manipulability μ = √det(J·Jᵀ)
       const JJt = new Float64Array(9);
       for (let i = 0; i < 3; i++)
         for (let j = 0; j < 3; j++) {
@@ -203,8 +267,20 @@ export class WelderUIController {
               - JJt[1] * (JJt[3] * JJt[8] - JJt[5] * JJt[6])
               + JJt[2] * (JJt[3] * JJt[7] - JJt[4] * JJt[6]);
       const mu = Math.sqrt(Math.max(0, d));
-      this._analytics.updateData(dt, targetXYZ, actualPos, mu);
+
+      // Joint velocity q̇ = (q - qPrev) / dt
+      const safeDt = dt > 1e-6 ? dt : 1e-6;
+      const qDot = this.q.map((qi, i) => (qi - this.lastQ[i]) / safeDt);
+
+      // Cartesian velocity ṗ = Jv · q̇
+      const pDot = calcCartesianVelocity(jac.J, n, qDot);
+      const velMag = Math.sqrt(pDot[0] ** 2 + pDot[1] ** 2 + pDot[2] ** 2);
+
+      this._analytics.updateData(dt, targetXYZ, actualPos, mu, velMag);
     }
+
+    // ── 8. Store previous q for velocity computation ──
+    this.lastQ = [...this.q];
 
     // ── Schedule next frame ──
     this._taskRAF = requestAnimationFrame(() => this._runTask());
@@ -397,5 +473,96 @@ export class WelderUIController {
       );
     }
     this._analytics.toggle();
+  }
+
+  /* ═══════════ Waypoint Planner ═══════════ */
+
+  _refreshWaypointViz() {
+    this._waypointPanel.refreshList(this._waypointTask.waypoints);
+    this.sm.updateWaypointVisualization(this._waypointTask.waypoints);
+    this._waypointPanel.updateStatus(
+      this._waypointTask.state, this._waypointTask.progress,
+      this._waypointTask.currentSegment, this._waypointTask.totalSegments
+    );
+  }
+
+  _playWaypoints() {
+    if (this._waypointTask.count < 2) return;
+    // Stop welding task if running
+    if (this.isWelding) this._toggleWelding();
+
+    this._waypointTask.play();
+    this._isWaypointRunning = true;
+    this._waypointLastTime = performance.now();
+    this._waypointPanel.setPlaying(true);
+    this._runWaypointTask();
+  }
+
+  _stopWaypoints() {
+    this._waypointTask.stop();
+    this._isWaypointRunning = false;
+    if (this._waypointRAF) { cancelAnimationFrame(this._waypointRAF); this._waypointRAF = null; }
+    this._waypointPanel.setPlaying(false);
+    this._refreshWaypointViz();
+  }
+
+  _runWaypointTask() {
+    if (!this._isWaypointRunning) return;
+
+    const now = performance.now();
+    const dt = Math.min((now - this._waypointLastTime) / 1000, 0.1);
+    this._waypointLastTime = now;
+
+    const { position: currentPos } = fk(this.q, WELDING_DH_CONFIG);
+    const targetXYZ = this._waypointTask.update(dt, currentPos);
+
+    if (!targetXYZ) {
+      // Task finished or stopped
+      this._isWaypointRunning = false;
+      this._waypointPanel.setPlaying(false);
+      this._refreshWaypointViz();
+      return;
+    }
+
+    // IK solve
+    const ik = ik_dls(targetXYZ, this.q, WELDING_DH_CONFIG, 80, 0.08, 1e-4);
+    this.q = ik.q;
+
+    // Update 3D scene
+    this._updateScene(targetXYZ);
+    this._updateHUD();
+    this._syncSliders();
+
+    // Update waypoint panel status
+    this._waypointPanel.updateStatus(
+      this._waypointTask.state, this._waypointTask.progress,
+      this._waypointTask.currentSegment, this._waypointTask.totalSegments
+    );
+
+    // Analytics feed during waypoint execution
+    if (this._analytics) {
+      const { position: actualPos } = fk(this.q, WELDING_DH_CONFIG);
+      const jac = jacobian(this.q, WELDING_DH_CONFIG);
+      const n = 6;
+      const JJt = new Float64Array(9);
+      for (let i = 0; i < 3; i++)
+        for (let j = 0; j < 3; j++) {
+          let sum = 0;
+          for (let k = 0; k < n; k++) sum += jac.J[i * n + k] * jac.J[j * n + k];
+          JJt[i * 3 + j] = sum;
+        }
+      const d = JJt[0] * (JJt[4] * JJt[8] - JJt[5] * JJt[7])
+              - JJt[1] * (JJt[3] * JJt[8] - JJt[5] * JJt[6])
+              + JJt[2] * (JJt[3] * JJt[7] - JJt[4] * JJt[6]);
+      const mu = Math.sqrt(Math.max(0, d));
+      const safeDt = dt > 1e-6 ? dt : 1e-6;
+      const qDot = this.q.map((qi, i) => (qi - this.lastQ[i]) / safeDt);
+      const pDot = calcCartesianVelocity(jac.J, n, qDot);
+      const velMag = Math.sqrt(pDot[0] ** 2 + pDot[1] ** 2 + pDot[2] ** 2);
+      this._analytics.updateData(dt, targetXYZ, actualPos, mu, velMag);
+    }
+    this.lastQ = [...this.q];
+
+    this._waypointRAF = requestAnimationFrame(() => this._runWaypointTask());
   }
 }

@@ -7,6 +7,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { fk, SCARA_DH_CONFIG } from '../math/KinematicsNDOF.js';
 
 const TRAIL_N = 80;
@@ -67,7 +68,34 @@ export default class ScaraSceneManager {
     this._controls.maxDistance = 4;
     this._camera.lookAt(this._controls.target);
 
+    // ── TransformControls (for dragging scene objects) ──
+    this._transformControls = new TransformControls(this._camera, this._renderer.domElement);
+    this._transformControls.setMode('translate');
+    this._transformControls.setSize(0.5);
+    this._transformControls.showX = true;
+    this._transformControls.showY = false;  // Lock to XZ plane (table surface)
+    this._transformControls.showZ = true;
+    this._scene.add(this._transformControls.getHelper());
 
+    // Disable OrbitControls while dragging a scene object
+    this._transformControls.addEventListener('dragging-changed', (event) => {
+      this._controls.enabled = !event.value;
+    });
+
+    // Callback for external sync when an object is dragged
+    this._onObjectDragged = null;
+    this._transformControls.addEventListener('change', () => {
+      if (this._transformControls.object && this._onObjectDragged) {
+        const obj = this._transformControls.object;
+        // Clamp Y to table surface during drag
+        if (obj === this._payload) {
+          obj.position.y = 0.013;
+        } else if (obj === this._dropZoneMesh) {
+          obj.position.y = 0.013;
+        }
+        this._onObjectDragged(obj);
+      }
+    });
 
     // ── Init sub-systems ──
     this._initLighting();
@@ -75,6 +103,7 @@ export default class ScaraSceneManager {
     this._initEnvironment();
     this._initScaraGeometry();
     this._initTargetAndTrail();
+    this._initPerceptionCamera();
 
     // ── Drag plane (horizontal at table surface y ≈ 0.025) ──
     this._dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.025);
@@ -571,6 +600,21 @@ export default class ScaraSceneManager {
     dzDot.position.set(0.30, 0.003, 0.20);
     s.add(dzDot);
     this._dropZoneDot = dzDot;
+
+    // Drop zone selectable mesh (clickable target for TransformControls)
+    this._dropZoneMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.04, 0.015, 0.04),
+      new THREE.MeshPhysicalMaterial({
+        color: 0x6c5ce7, roughness: 0.3, metalness: 0.4,
+        clearcoat: 0.6, transparent: true, opacity: 0.55,
+        envMapIntensity: 1.5
+      })
+    );
+    this._dropZoneMesh.position.set(0.30, 0.013, 0.20);
+    this._dropZoneMesh.castShadow = true;
+    s.add(this._dropZoneMesh);
+    this._dropZoneMesh.userData.draggable = true;
+    this._dropZoneMesh.userData.role = 'dropZone';
   }
 
   /* ════════════════════════════════════════════════════════
@@ -606,6 +650,7 @@ export default class ScaraSceneManager {
   setDropZonePosition(x, z) {
     this._dropZoneRing.position.set(x, 0.002, z);
     this._dropZoneDot.position.set(x, 0.003, z);
+    if (this._dropZoneMesh) this._dropZoneMesh.position.set(x, 0.013, z);
   }
 
   /* ════════════════════════════════════════════════════════
@@ -747,7 +792,153 @@ export default class ScaraSceneManager {
     this._trailIdx = 0;
   }
 
+  /* ════════════════════════════════════════════════════════
+     Perception Camera — simulated pinhole camera + frustum
+     ════════════════════════════════════════════════════════ */
+  _initPerceptionCamera() {
+    // Secondary camera for perception simulation
+    // near=0.01 (not 0.05) so the table surface at y≈0 is visible from y=1.20
+    this._percCamera = new THREE.PerspectiveCamera(60, 320 / 240, 0.01, 5.0);
+    this._percCamera.position.set(0.30, 1.20, 0.00);
+    this._percCamera.rotation.set(-Math.PI / 2, 0, 0); // Looking down
+    this._scene.add(this._percCamera);
 
+    // Camera helper draws the FOV frustum wireframe
+    this._percHelper = new THREE.CameraHelper(this._percCamera);
+    this._scene.add(this._percHelper);
+
+    // Camera body mesh (small box to represent the physical camera)
+    const camBodyMat = new THREE.MeshPhysicalMaterial({
+      color: 0x2a2d38, roughness: 0.3, metalness: 0.85,
+      clearcoat: 0.5, envMapIntensity: 1.4
+    });
+    this._camBodyMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.04, 0.03, 0.05),
+      camBodyMat
+    );
+    this._camBodyMesh.castShadow = true;
+    this._scene.add(this._camBodyMesh);
+
+    // Camera lens (cylinder)
+    const lensMat = new THREE.MeshPhysicalMaterial({
+      color: 0x111122, roughness: 0.05, metalness: 0.4,
+      clearcoat: 1.0, envMapIntensity: 2.0
+    });
+    this._camLensMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.012, 0.014, 0.02, 16),
+      lensMat
+    );
+    this._scene.add(this._camLensMesh);
+
+    // LED indicator light
+    this._camLED = new THREE.Mesh(
+      new THREE.SphereGeometry(0.004, 8, 8),
+      new THREE.MeshBasicMaterial({ color: 0x00ff44 })
+    );
+    this._scene.add(this._camLED);
+
+    // Start hidden — activated by CameraPanel
+    this._percActive = false;
+    this._percHelper.visible = false;
+    this._camBodyMesh.visible = false;
+    this._camLensMesh.visible = false;
+    this._camLED.visible = false;
+
+    // Off-screen render target — avoids resizing the main canvas (FIX 1)
+    this._percRT = new THREE.WebGLRenderTarget(320, 240, {
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+      format: THREE.RGBAFormat,
+    });
+  }
+
+  /**
+   * Update the perception camera's position, rotation, and FOV.
+   * @param {number} tx  - Position X (Three.js coords)
+   * @param {number} ty  - Position Y (Three.js coords, up)
+   * @param {number} tz  - Position Z (Three.js coords)
+   * @param {number} rx  - Rotation X (rad)
+   * @param {number} ry  - Rotation Y (rad)
+   * @param {number} rz  - Rotation Z (rad)
+   * @param {number} fov - Vertical FOV (degrees)
+   */
+  updatePerceptionCamera(tx, ty, tz, rx, ry, rz, fov) {
+    this._percCamera.position.set(tx, ty, tz);
+    this._percCamera.rotation.set(rx, ry, rz, 'XYZ');
+    this._percCamera.fov = fov;
+    this._percCamera.updateProjectionMatrix();
+    this._percHelper.update();
+
+    // Move camera body mesh to match
+    this._camBodyMesh.position.set(tx, ty, tz);
+    this._camBodyMesh.rotation.set(rx, ry, rz, 'XYZ');
+
+    // Lens points downward from camera body
+    const lensOffset = new THREE.Vector3(0, -0.025, 0);
+    lensOffset.applyEuler(new THREE.Euler(rx, ry, rz, 'XYZ'));
+    this._camLensMesh.position.set(tx + lensOffset.x, ty + lensOffset.y, tz + lensOffset.z);
+    this._camLensMesh.rotation.set(rx, ry, rz, 'XYZ');
+
+    // LED on top-right
+    const ledOffset = new THREE.Vector3(0.015, 0.016, -0.02);
+    ledOffset.applyEuler(new THREE.Euler(rx, ry, rz, 'XYZ'));
+    this._camLED.position.set(tx + ledOffset.x, ty + ledOffset.y, tz + ledOffset.z);
+  }
+
+  /**
+   * Render the perception camera view to an external canvas.
+   * Uses a WebGLRenderTarget so the main viewport is never disturbed.
+   * @param {HTMLCanvasElement} targetCanvas
+   */
+  renderPerceptionView(targetCanvas) {
+    if (!targetCanvas || !this._percCamera || !this._percRT) return;
+
+    // Temporarily hide camera body visuals from perception view
+    const wasHelperVisible    = this._percHelper.visible;
+    const wasBodyVisible      = this._camBodyMesh.visible;
+    const wasLensVisible      = this._camLensMesh.visible;
+    const wasLEDVisible       = this._camLED.visible;
+    this._percHelper.visible    = false;
+    this._camBodyMesh.visible   = false;
+    this._camLensMesh.visible   = false;
+    this._camLED.visible        = false;
+
+    // Render into offscreen render target (no main canvas resize)
+    this._renderer.setRenderTarget(this._percRT);
+    this._renderer.render(this._scene, this._percCamera);
+    this._renderer.setRenderTarget(null);
+
+    // Restore visibility before restoring render target
+    this._percHelper.visible    = wasHelperVisible;
+    this._camBodyMesh.visible   = wasBodyVisible;
+    this._camLensMesh.visible   = wasLensVisible;
+    this._camLED.visible        = wasLEDVisible;
+
+    // Read pixels from render target and draw onto the target canvas
+    const w = this._percRT.width;
+    const h = this._percRT.height;
+    const buffer = new Uint8Array(w * h * 4);
+    this._renderer.readRenderTargetPixels(this._percRT, 0, 0, w, h, buffer);
+
+    // WebGL renders bottom-up; flip vertically when drawing to 2D canvas
+    const ctx = targetCanvas.getContext('2d');
+    const imgData = ctx.createImageData(w, h);
+    for (let row = 0; row < h; row++) {
+      const src = (h - 1 - row) * w * 4;
+      const dst = row * w * 4;
+      imgData.data.set(buffer.subarray(src, src + w * 4), dst);
+    }
+    ctx.putImageData(imgData, 0, 0);
+  }
+
+  /** Toggle perception camera visibility */
+  setPerceptionActive(active) {
+    this._percActive = active;
+    this._percHelper.visible = active;
+    this._camBodyMesh.visible = active;
+    this._camLensMesh.visible = active;
+    this._camLED.visible = active;
+  }
 
   /* ════════════════════════════════════════════════════════
      Render Loop
@@ -775,4 +966,10 @@ export default class ScaraSceneManager {
   get eeWorldPos()   { return this._eeWorldPos; }
   get payload()      { return this._payload; }
   get payloadAttached() { return this._payloadAttached; }
+  get dropZoneMesh() { return this._dropZoneMesh; }
+  get transformControls() { return this._transformControls; }
+  get percCamera()   { return this._percCamera; }
+
+  /** Register callback for object drag sync: (mesh) => void */
+  set onObjectDragged(fn) { this._onObjectDragged = fn; }
 }

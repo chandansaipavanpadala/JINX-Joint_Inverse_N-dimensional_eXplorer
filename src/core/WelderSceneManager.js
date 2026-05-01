@@ -456,6 +456,67 @@ export class WelderSceneManager {
     this._trailMat = new THREE.LineBasicMaterial({
       color: 0x00e5ff, transparent: true, opacity: 0.7
     });
+
+    // Waypoint visualization objects (managed by updateWaypointVisualization)
+    this._wpSpheres = [];
+    this._wpLine = null;
+    this._wpSphereMat = new THREE.MeshPhysicalMaterial({
+      color: 0xffcc00, emissive: 0xff9900, emissiveIntensity: 0.6,
+      roughness: 0.1, metalness: 0.5, clearcoat: 1.0, transparent: true, opacity: 0.85
+    });
+    this._wpLineMat = new THREE.LineDashedMaterial({
+      color: 0xffcc00, dashSize: 0.015, gapSize: 0.008,
+      transparent: true, opacity: 0.55
+    });
+  }
+
+  /* ════════════════════════════════════════════════════════
+     Waypoint Visualization — spheres + connecting line
+     Call with an array of { x, y, z } in DH coords.
+     Pass empty array to clear.
+     ════════════════════════════════════════════════════════ */
+  updateWaypointVisualization(waypoints) {
+    const s = this._scene;
+
+    // Remove old spheres
+    this._wpSpheres.forEach(m => { s.remove(m); m.geometry.dispose(); });
+    this._wpSpheres = [];
+
+    // Remove old line
+    if (this._wpLine) {
+      s.remove(this._wpLine);
+      this._wpLine.geometry.dispose();
+      this._wpLine = null;
+    }
+
+    if (!waypoints || waypoints.length === 0) return;
+
+    // FIX 6: create a new geometry per sphere (not shared) to avoid
+    // double-dispose when the list is cleared — all meshes would share
+    // the same BufferGeometry and the 2nd dispose would crash WebGL.
+    const pts = [];
+
+    waypoints.forEach(wp => {
+      // DH → Three.js:  x=DH.x, y=DH.z, z=-DH.y
+      const pos = V3(wp.x, wp.z, -wp.y);
+      pts.push(pos);
+
+      const mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.012, 14, 14), // unique geometry per sphere
+        this._wpSphereMat
+      );
+      mesh.position.copy(pos);
+      s.add(mesh);
+      this._wpSpheres.push(mesh);
+    });
+
+    // Connecting line
+    if (pts.length >= 2) {
+      const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      this._wpLine = new THREE.Line(geo, this._wpLineMat);
+      this._wpLine.computeLineDistances();
+      s.add(this._wpLine);
+    }
   }
 
   /* ════════════════════════════════════════════════════════

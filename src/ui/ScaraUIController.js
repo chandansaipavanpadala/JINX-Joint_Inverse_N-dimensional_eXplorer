@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { ik_dls, fk, jacobian, SCARA_DH_CONFIG } from '../math/KinematicsNDOF.js';
 import PickAndPlaceStateMachine, { STATE, STATE_META } from '../logic/PickAndPlace.js';
 import AnalyticsPanel from './AnalyticsPanel.js';
+import CameraPanel from './CameraPanel.js';
 
 const $ = id => document.getElementById(id);
 const DEG = v => v * Math.PI / 180;
@@ -38,6 +39,18 @@ export default class ScaraUIController {
 
     // Analytics panel (lazy-mounted)
     this._analytics = null;
+
+    // ── TransformControls object selection ──
+    // Mark payload as draggable
+    this.sm.payload.userData.draggable = true;
+    this.sm.payload.userData.role = 'payload';
+
+    // Wire up drag sync callback
+    this.sm.onObjectDragged = (mesh) => this._onSceneObjectDragged(mesh);
+
+    // ── Camera Panel (lazy-mounted) ──
+    this._cameraPanel = null;
+    this._camRenderSkip = 0;
 
     this._bindEvents();
   }
@@ -84,6 +97,10 @@ export default class ScaraUIController {
     // Analytics button
     const analyticsBtn = $('analyticsBtn');
     if (analyticsBtn) analyticsBtn.addEventListener('click', () => this._toggleAnalytics());
+
+    // Camera button
+    const camBtn = $('cameraBtn');
+    if (camBtn) camBtn.addEventListener('click', () => this._toggleCamera());
   }
 
   /* ═══════════ Tabs ═══════════ */
@@ -284,6 +301,16 @@ export default class ScaraUIController {
 
     // Update Jacobian if on that tab
     if (this._tab === 'jac') this._updateJacobian();
+
+    // ── Perception camera viewport render (throttled) ──
+    // FIX 2: reuse result.position instead of calling fk() again
+    if (this._cameraPanel && this._cameraPanel.isVisible) {
+      this._camRenderSkip++;
+      if (this._camRenderSkip % 3 === 0) {
+        this.sm.renderPerceptionView(this._cameraPanel.viewportCanvas);
+      }
+      this._cameraPanel.updateProjection(pos);
+    }
   }
 
   /* ═══════════ Master Update (initial call) ═══════════ */
@@ -461,7 +488,24 @@ export default class ScaraUIController {
       }
     }
 
-    // Normal drag behavior
+    // Normal drag behavior — also check for draggable scene objects
+    const draggables = [this.sm.payload, this.sm.dropZoneMesh].filter(Boolean);
+    const hits = this._raycaster.intersectObjects(draggables, false);
+
+    if (hits.length > 0 && !this._pnp.running) {
+      // Attach TransformControls to the clicked object
+      const hitMesh = hits[0].object;
+      this.sm.transformControls.attach(hitMesh);
+      return; // consume click
+    }
+
+    // If clicking on empty space, detach TransformControls
+    // FIX 4: use .dragging flag instead of unreliable getHelper() raycast
+    if (this.sm.transformControls.object && !this.sm.transformControls.dragging) {
+      this.sm.transformControls.detach();
+    }
+
+    // Legacy: drag target sphere for IK
     if (this._raycaster.intersectObject(this.sm.targetSphere).length > 0) {
       this._isDragging = true;
       this.sm.controls.enabled = false;
@@ -492,9 +536,56 @@ export default class ScaraUIController {
   }
 
   _onPointerUp() {
+    // FIX 3: only re-enable OrbitControls if the legacy IK-sphere drag was
+    // responsible for disabling it — TransformControls manages its own state
+    // via the 'dragging-changed' event on the scene manager.
+    if (this._isDragging) {
+      this.sm.controls.enabled = true;
+      document.body.style.cursor = 'default';
+    }
     this._isDragging = false;
-    this.sm.controls.enabled = true;
-    document.body.style.cursor = 'default';
+  }
+
+  /* ═══════════ Scene Object Drag Sync ═══════════ */
+
+  /**
+   * Called when a draggable scene object (payload or dropZone) is moved
+   * via TransformControls. Syncs the new position back to:
+   *  - The PickAndPlace state machine targets
+   *  - The visual glow/ring markers
+   */
+  _onSceneObjectDragged(mesh) {
+    // Three.js coords: x, y(up), z
+    // DH coords:       x, -z, y
+    const threeX = mesh.position.x;
+    const threeZ = mesh.position.z;
+    const dhX = threeX;
+    const dhY = -threeZ;
+
+    if (mesh.userData.role === 'payload') {
+      // FIX 5: use public setPayloadPosition instead of sm._payloadGlow (private)
+      // setPayloadPosition already syncs the glow ring — no duplicate call needed
+      this._pnp.setPickPos(dhX, dhY, this._pnp.pickPos[2]);
+      this.sm.setPayloadPosition(threeX, 0.013, threeZ);
+    } else if (mesh.userData.role === 'dropZone') {
+      // Update drop position in the state machine
+      this._pnp.setDropPos(dhX, dhY, this._pnp.dropPos[2]);
+      // Sync ring and dot visuals
+      this.sm.setDropZonePosition(threeX, threeZ);
+      // Override mesh position back (setDropZonePosition already does it)
+    }
+
+    // Update task cards if visible
+    const pickEl = $('task-pick');
+    const dropEl = $('task-drop');
+    if (pickEl) {
+      const p = this._pnp.pickPos;
+      pickEl.textContent = `(${p[0].toFixed(2)}, ${p[1].toFixed(2)}, ${p[2].toFixed(2)})`;
+    }
+    if (dropEl) {
+      const d = this._pnp.dropPos;
+      dropEl.textContent = `(${d[0].toFixed(2)}, ${d[1].toFixed(2)}, ${d[2].toFixed(2)})`;
+    }
   }
 
   /* ═══════════ Analytics Panel ═══════════ */
@@ -507,5 +598,43 @@ export default class ScaraUIController {
       );
     }
     this._analytics.toggle();
+  }
+
+  /* ═══════════ Perception Camera ═══════════ */
+  _toggleCamera() {
+    if (!this._cameraPanel) {
+      this._cameraPanel = new CameraPanel({
+        mountRoot: document.getElementById('cw'),
+        startX: 20, startY: 420,
+        getEEPos: () => {
+          const { position } = fk(this.q, SCARA_DH_CONFIG);
+          return position;
+        },
+        onChange: (params) => {
+          this.sm.updatePerceptionCamera(
+            params.tx, params.ty, params.tz,
+            params.rx, params.ry, params.rz,
+            params.fov
+          );
+          this.sm.setPerceptionActive(true);
+        },
+      });
+    }
+
+    this._cameraPanel.toggle();
+
+    // Sync perception camera visibility with panel
+    if (this._cameraPanel.isVisible) {
+      this.sm.setPerceptionActive(true);
+      // Trigger initial camera update
+      const p = this._cameraPanel.params;
+      this.sm.updatePerceptionCamera(
+        p.tx, p.ty, p.tz,
+        p.rx * Math.PI / 180, p.ry * Math.PI / 180, p.rz * Math.PI / 180,
+        p.fov
+      );
+    } else {
+      this.sm.setPerceptionActive(false);
+    }
   }
 }

@@ -295,6 +295,36 @@ export function jacobian(q, dhTable) {
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
+//  §3b  CARTESIAN VELOCITY  ṗ = Jv · q̇
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Compute the Cartesian (linear) velocity of the end-effector.
+ *
+ *   ṗ = Jv(q) · q̇
+ *
+ * Where Jv is the top 3 rows (linear velocity) of the 6×N geometric Jacobian,
+ * and q̇ is the N-dimensional joint velocity vector.
+ *
+ * @param {Float64Array} J  - Flat 6×N Jacobian in row-major order (from `jacobian()`)
+ * @param {number}       n  - Number of joints (columns of J)
+ * @param {number[]}     qDot - Joint velocity vector [q̇₁, q̇₂, …, q̇ₙ]
+ * @returns {number[]} [ẋ, ẏ, ż] — Cartesian velocity in the base frame
+ */
+export function calcCartesianVelocity(J, n, qDot) {
+  const pdot = [0, 0, 0];
+  for (let row = 0; row < 3; row++) {
+    let sum = 0;
+    for (let col = 0; col < n; col++) {
+      sum += J[row * n + col] * qDot[col];
+    }
+    pdot[row] = sum;
+  }
+  return pdot;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
 //  §4  SMALL DENSE LINEAR ALGEBRA (for DLS solver)
 // ═══════════════════════════════════════════════════════════════════════════════
 
