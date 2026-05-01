@@ -42,7 +42,7 @@ export const STATE_META = Object.freeze({
 
 const DEFAULTS = {
   pickPos:    [0.40, 0.15, 0.35],
-  dropPos:    [0.30, -0.20, 0.35],
+  dropPos:    [0.35, 0.10, 0.35],
   safeZ:      0.35,
   graspZ:     0.03,
   durations: {

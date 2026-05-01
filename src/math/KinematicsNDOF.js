@@ -614,7 +614,7 @@ export function ik_dls(
  *   - Joint limits: ±135° for yaw joints, 0–200 mm for prismatic stroke,
  *     ±180° for tool roll.
  */
-export const SCARA_DH_CONFIG = Object.freeze([
+export const SCARA_DH_CONFIG = [
   {
     a: 0.30,
     alpha: 0,
@@ -651,18 +651,18 @@ export const SCARA_DH_CONFIG = Object.freeze([
     limitMin: -Math.PI, // -180°
     limitMax: Math.PI, //  180°
   },
-]);
+];
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  §7  WELDING 6-DOF ANTHROPOMORPHIC CONFIGURATION
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const WELDING_DH_CONFIG = Object.freeze([
+export const WELDING_DH_CONFIG = [
   { a: 0, alpha: Math.PI / 2, d: 0.25, theta: 0, type: 'R', limitMin: -Math.PI, limitMax: Math.PI },
   { a: 0.35, alpha: 0, d: 0, theta: Math.PI / 2, type: 'R', limitMin: -Math.PI / 2, limitMax: Math.PI / 2 },
   { a: 0.25, alpha: 0, d: 0, theta: 0, type: 'R', limitMin: -Math.PI * 0.8, limitMax: Math.PI * 0.8 },
   { a: 0, alpha: Math.PI / 2, d: 0.10, theta: 0, type: 'R', limitMin: -Math.PI, limitMax: Math.PI },
   { a: 0, alpha: -Math.PI / 2, d: 0.10, theta: 0, type: 'R', limitMin: -Math.PI, limitMax: Math.PI },
   { a: 0, alpha: 0, d: 0.05, theta: 0, type: 'R', limitMin: -Math.PI, limitMax: Math.PI }
-]);
+];
 

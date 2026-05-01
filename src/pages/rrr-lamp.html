@@ -28,7 +28,7 @@
 
     <div class="body-row">
 
-      <!-- 3D Canvas -->
+      <!-- 3D Canvas (now takes full width) -->
       <div id="cw">
         <div class="hud" id="hud">
           <div><b>θ₁</b> <span id="h1">—</span>&ensp;<b>θ₂</b> <span id="h2">—</span>&ensp;<b>θ₃</b> <span
@@ -41,226 +41,86 @@
         <div id="camPov"></div>
         <div class="pov-label">Camera POV</div>
         <div class="cam-hint">Drag to orbit · Scroll to zoom · Right-drag to pan</div>
+
+        <!-- ═══ Minimal Control Bar ═══ -->
+        <div class="sim-control-bar" id="simControlBar">
+          <button class="sim-btn sim-btn-primary" id="sbtn">▶ Run Simulation</button>
+          <button class="sim-btn sim-btn-secondary" id="btn-math-panel">📐 Open Math Panel</button>
+          <button class="sim-btn sim-btn-ghost" id="resetBtn">⟲ Reset</button>
+        </div>
+
+        <!-- ═══ Link Detail Card (hidden by default) ═══ -->
+        <div class="link-card" id="linkCard">
+          <div class="link-card-header">
+            <span class="link-card-icon">🔗</span>
+            <span class="link-card-title" id="linkCardTitle">Link</span>
+            <button class="link-card-close" id="linkCardClose">✕</button>
+          </div>
+          <div class="link-card-body">
+            <div class="link-card-readout">
+              <span class="link-card-label">Length</span>
+              <span class="link-card-value" id="linkCardValue">0.000 m</span>
+            </div>
+            <input type="range" class="link-card-slider" id="linkCardSlider" min="0.05" max="0.50" value="0.30" step="0.005">
+            <div class="link-card-range">
+              <span id="linkCardMin">0.05</span>
+              <span class="link-card-default" id="linkCardDefault">default: 0.30 m</span>
+              <span id="linkCardMax">0.50</span>
+            </div>
+            <button class="link-card-reset" id="linkCardReset">⟲ Reset to Default</button>
+          </div>
+        </div>
+
       </div>
 
-      <!-- Control panel -->
-      <div class="panel">
-        <div class="tabs" id="tabBar">
-          <button class="tab active" data-tab="ik">IK</button>
-          <button class="tab" data-tab="jac">Jacobian</button>
-          <button class="tab" data-tab="sim">Simulate</button>
-          <button class="tab" data-tab="cam">Camera</button>
-        </div>
-
-        <!-- IK Pane -->
-        <div class="pane on" id="pane-ik">
-          <div class="sec">Hand Target Position (Table Surface)</div>
-          <div class="ctrl"><label>x_target (m)</label><input type="range" id="xd" min="-0.15" max="0.85" value="0.28"
-              step="0.01"><span class="val" id="xdv">0.28</span></div>
-          <div class="ctrl"><label>y_target (m)</label><input type="range" id="yd" min="-0.30" max="0.30" value="0.14"
-              step="0.01"><span class="val" id="ydv">0.14</span></div>
-          <div class="ctrl"><label>Elbow config</label>
-            <select id="elbow" class="sel">
-              <option value="1">Elbow-up (+)</option>
-              <option value="-1">Elbow-down (−)</option>
-            </select>
-          </div>
-
-          <div class="alert" id="ikAlert">⚠ Target out of reach — |L₂−L₃| ≤ D ≤ L₂+L₃</div>
-          <div class="alert" id="limAlert">⚠ Joint limit violated — increase Δz offset</div>
-
-          <div id="ik-res">
-            <div class="sec">IK Solution q*</div>
-            <div class="cards" style="grid-template-columns:1fr 1fr 1fr">
-              <div class="card"><div class="cl">θ₁ Yaw</div><div class="cv" id="ik-t1">—</div></div>
-              <div class="card"><div class="cl">θ₂ Shoulder</div><div class="cv" id="ik-t2">—</div></div>
-              <div class="card"><div class="cl">θ₃ Elbow</div><div class="cv" id="ik-t3">—</div></div>
-            </div>
-            <div class="cards">
-              <div class="card"><div class="cl">FK Verify ‖e‖</div><div class="cv" id="ik-err">—</div></div>
-              <div class="card"><div class="cl">Reach r (m)</div><div class="cv" id="ik-r">—</div></div>
-              <div class="card"><div class="cl">Head z (m)</div><div class="cv" id="ik-z">—</div></div>
-              <div class="card"><div class="cl">Manipulability</div><div class="cv" id="ik-mu">—</div></div>
-            </div>
-            <!-- Workspace constraints -->
-            <div class="sec">Joint Limits (Physical)</div>
-            <table class="dht">
-              <tr><th>Joint</th><th>Min</th><th>Max</th><th>Constraint</th></tr>
-              <tr><td>θ₁ Yaw</td><td>−170°</td><td>+170°</td><td style="text-align:left;font-size:10px">Cable wrap</td></tr>
-              <tr><td>θ₂ Shoulder</td><td>15°</td><td>115°</td><td style="text-align:left;font-size:10px">Above table</td></tr>
-              <tr><td>θ₃ Elbow</td><td>20°</td><td>145°</td><td style="text-align:left;font-size:10px">Arch fold</td></tr>
-            </table>
-          </div>
-        </div>
-
-        <!-- Jacobian Pane -->
-        <div class="pane" id="pane-jac">
-          <div class="sec">Analytical Jacobian J(q) — 3×3</div>
-          <div style="font-size:10px;color:var(--muted)">ṗ = J(q) q̇ &nbsp;·&nbsp; colors: <span
-              style="color:#40b870">pos</span> / <span style="color:#e05050">neg</span> / <span
-              style="color:var(--muted)">≈0</span> &nbsp;·&nbsp; rows: <span style="color:var(--axis-x)">X</span> <span style="color:var(--axis-y)">Y</span> <span style="color:var(--axis-z)">Z</span></div>
-          <div class="jgrid">
-            <div></div>
-            <div class="jh">∂/∂θ₁</div><div class="jh">∂/∂θ₂</div><div class="jh">∂/∂θ₃</div>
-            <div class="jrow-lbl axis-x">ẋ</div><div class="jc jc-x" id="j11">—</div><div class="jc jc-x" id="j12">—</div><div class="jc jc-x" id="j13">—</div>
-            <div class="jrow-lbl axis-y">ẏ</div><div class="jc jc-y" id="j21">—</div><div class="jc jc-y" id="j22">—</div><div class="jc jc-y" id="j23">—</div>
-            <div class="jrow-lbl axis-z">ż</div><div class="jc jc-z" id="j31">—</div><div class="jc jc-z" id="j32">—</div><div class="jc jc-z" id="j33">—</div>
-          </div>
-
-          <div class="sec">Metrics</div>
-          <div class="cards">
-            <div class="card has-tooltip" data-tooltip="Determinant of the Jacobian matrix. Zero = singularity."><div class="cl">det J</div><div class="cv" id="detJ">—</div></div>
-            <div class="card has-tooltip" data-tooltip="Manipulability index μ = |det(J)|. Higher = more dexterous."><div class="cl">Manipulability μ</div><div class="cv" id="jmu">—</div></div>
-            <div class="card has-tooltip" data-tooltip="sin(θ₃) → 0 means elbow singularity (fully extended/folded)."><div class="cl">sin θ₃</div><div class="cv" id="sinT3">—</div></div>
-            <div class="card has-tooltip" data-tooltip="Horizontal reach distance r = √(x² + y²) from base."><div class="cl">Reach r</div><div class="cv" id="jreach">—</div></div>
-          </div>
-
-          <div class="sec">Manipulability Index</div>
-          <div class="mu-bar-wrap"><div class="mu-bar" id="muBar" style="width:0%"></div></div>
-          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted)">
-            <span>Singular</span><span id="muLabel">μ = —</span><span>High</span>
-          </div>
-
-          <div id="singWarn" class="alert" style="display:none">⚠ Near singularity — sin θ₃ ≈ 0 (elbow extended/folded)</div>
-          <div id="singWarn2" class="alert" style="display:none">⚠ Shoulder singularity — r ≈ 0 (arm vertical)</div>
-
-          <div class="sec">Use IK Sliders (drives Jacobian)</div>
-          <div class="ctrl"><label>x_target (m)</label><input type="range" id="jxd" min="-0.15" max="0.85" value="0.28"
-              step="0.01"><span class="val" id="jxdv">0.28</span></div>
-          <div class="ctrl"><label>y_target (m)</label><input type="range" id="jyd" min="-0.30" max="0.30" value="0.14"
-              step="0.01"><span class="val" id="jydv">0.14</span></div>
-        </div>
-
-        <!-- Simulate Pane -->
-        <div class="pane" id="pane-sim">
-          <div class="sec">Occlusion Avoidance Simulation</div>
-          <div class="info-box">
-            Hand traces oval on table.<br>
-            Lamp solves: <b style="color:var(--gold)">p* = p_hand + Δ</b><br>
-            <span style="opacity:.7">Trapezoidal velocity profile · Closed-form IK · ‖err‖ ≈ 10⁻¹⁶ m</span>
-          </div>
-          <div class="ctrl"><label>Speed</label><input type="range" id="spd" min="0.2" max="4" value="1"
-              step="0.1"><span class="val" id="spdv">1.0×</span></div>
-          <div class="ctrl"><label>Oval radius</label><input type="range" id="hR" min="0.03" max="0.18" value="0.08"
-              step="0.01"><span class="val" id="hRv">0.08 m</span></div>
-
-          <div class="sec">Trapezoidal Velocity Profile (Eq. 74)</div>
-          <div class="info-box" style="font-size:10px;margin-bottom:2px">
-            s(t): accel → cruise → decel · avoids abrupt velocity changes for hardware safety
-          </div>
-          <div class="ctrl"><label>v<sub>max</sub> (rad/s)</label><input type="range" id="vmax" min="0.3" max="3.0"
-              value="1.2" step="0.1"><span class="val" id="vmaxv">1.20</span></div>
-          <div class="ctrl"><label>a<sub>max</sub> (rad/s²)</label><input type="range" id="amax" min="0.5" max="6.0"
-              value="2.0" step="0.25"><span class="val" id="amaxv">2.00</span></div>
-          <canvas id="trapCvs"></canvas>
-          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted)">
-            <span>t=0</span><span id="trapLabel">Trap profile — accel/cruise/decel</span><span>t=T</span>
-          </div>
-
-          <button class="sbtn" id="sbtn">▶ Play Simulation</button>
-          <div id="simStats" style="display:none">
-            <div class="cards">
-              <div class="card"><div class="cl">Frame</div><div class="cv" id="simF">—</div></div>
-              <div class="card"><div class="cl">IK Error</div><div class="cv ok" id="simE">—</div></div>
-              <div class="card"><div class="cl">θ₂ (°)</div><div class="cv" id="simT2">—</div></div>
-              <div class="card"><div class="cl">μ (manip)</div><div class="cv" id="simMu">—</div></div>
-            </div>
-            <div class="cards" style="margin-top:4px">
-              <div class="card"><div class="cl">Trap phase</div><div class="cv" id="simPhase">—</div></div>
-              <div class="card"><div class="cl">s(t)</div><div class="cv" id="simS">—</div></div>
-              <div class="card"><div class="cl">ṡ (vel)</div><div class="cv" id="simSdot">—</div></div>
-              <div class="card"><div class="cl">s̈ (accel)</div><div class="cv" id="simSddot">—</div></div>
-            </div>
-            <!-- Mini trajectory plot -->
-            <div class="sec" style="margin-top:4px">Top-view Trajectory</div>
-            <canvas id="trajCvs"></canvas>
-          </div>
-        </div>
-
-        <!-- Camera Pane -->
-        <div class="pane" id="pane-cam">
-          <div class="sec">Pinhole Camera Model (Eq. 63–68)</div>
-          <div class="info-box" style="font-size:10px">
-            Camera estimates 3D hand position from 2D pixel coordinates + depth.<br>
-            <b style="color:var(--gold)">p_robot = R·p_cam + t</b> → feeds IK solver
-          </div>
-
-          <div class="sec">Intrinsic Parameters</div>
-          <div class="ctrl"><label>f<sub>x</sub> (px)</label><input type="range" id="cfx" min="300" max="900" value="525" step="5"><span class="val" id="cfxv">525</span></div>
-          <div class="ctrl"><label>f<sub>y</sub> (px)</label><input type="range" id="cfy" min="300" max="900" value="525" step="5"><span class="val" id="cfyv">525</span></div>
-          <div class="ctrl"><label>c<sub>x</sub> (px)</label><input type="range" id="ccx" min="200" max="700" value="320" step="5"><span class="val" id="ccxv">320</span></div>
-          <div class="ctrl"><label>c<sub>y</sub> (px)</label><input type="range" id="ccy" min="100" max="500" value="240" step="5"><span class="val" id="ccyv">240</span></div>
-
-          <div class="sec">Simulated Detection (pixel + depth)</div>
-          <div class="ctrl"><label>u (px)</label><input type="range" id="cu" min="0" max="640" value="320" step="1"><span class="val" id="cuv">320</span></div>
-          <div class="ctrl"><label>v (px)</label><input type="range" id="cv_" min="0" max="480" value="240" step="1"><span class="val" id="cvv">240</span></div>
-          <div class="ctrl"><label>Z<sub>w</sub> (m)</label><input type="range" id="czw" min="0.30" max="1.20" value="0.65" step="0.01"><span class="val" id="czwv">0.65</span></div>
-
-          <div class="sec">Extrinsic: Camera→Robot Transform</div>
-          <div class="ctrl"><label>t<sub>x</sub> (m)</label><input type="range" id="ctx" min="-0.5" max="0.5" value="0.0" step="0.01"><span class="val" id="ctxv"> 0.00</span></div>
-          <div class="ctrl"><label>t<sub>y</sub> (m)</label><input type="range" id="cty" min="0.0" max="1.0" value="0.50" step="0.01"><span class="val" id="ctyv"> 0.50</span></div>
-          <div class="ctrl"><label>t<sub>z</sub> (m)</label><input type="range" id="ctz" min="-0.5" max="0.5" value="0.30" step="0.01"><span class="val" id="ctzv"> 0.30</span></div>
-
-          <div class="sec">3D Reconstruction (Eq. 64–67)</div>
-          <div class="pinhole-display" id="camOut">
-            <div class="ph-row"><span class="ph-lbl">X_w (cam)</span><span class="ph-val" id="camXw">—</span></div>
-            <div class="ph-row"><span class="ph-lbl">Y_w (cam)</span><span class="ph-val" id="camYw">—</span></div>
-            <div class="ph-row"><span class="ph-lbl">Z_w (cam)</span><span class="ph-val" id="camZw">—</span></div>
-            <div style="border-top:1px solid var(--border);margin:4px 0"></div>
-            <div class="ph-row"><span class="ph-lbl">x_robot</span><span class="ph-val" id="camRx">—</span></div>
-            <div class="ph-row"><span class="ph-lbl">y_robot</span><span class="ph-val" id="camRy">—</span></div>
-            <div class="ph-row"><span class="ph-lbl">z_robot</span><span class="ph-val" id="camRz">—</span></div>
-            <div style="border-top:1px solid var(--border);margin:4px 0"></div>
-            <div class="ph-row"><span class="ph-lbl">IK from camera</span><span class="ph-val" id="camIK" style="color:var(--grn)">—</span></div>
-          </div>
-          <button class="sbtn" id="camApplyBtn"
-            style="background:linear-gradient(135deg,#003a6a,#0088cc);color:#fff">
-            Apply Camera IK to Scene
-          </button>
-          <div class="alert" id="camAlert">⚠ Reconstructed point out of robot reach</div>
-        </div>
-
-        <div class="div"></div>
-
-        <!-- Offset (always visible) -->
-        <div style="padding:12px 14px;display:flex;flex-direction:column;gap:9px">
-          <div class="sec">Occlusion Offset Δ = p* − p_hand</div>
-          <div class="ctrl"><label>Δx (m)</label><input type="range" id="dx" min="-0.2" max="0.1" value="-0.04" step="0.01"><span class="val" id="dxv">-0.04</span></div>
-          <div class="ctrl"><label>Δy (m)</label><input type="range" id="dy" min="-0.2" max="0.2" value="0.0" step="0.01"><span class="val" id="dyv"> 0.00</span></div>
-          <div class="ctrl"><label>Δz (m)</label><input type="range" id="dz" min="0.20" max="0.55" value="0.45" step="0.01"><span class="val" id="dzv"> 0.45</span></div>
-          <div style="font-size:10px;color:var(--muted)">Δz ≥ 0.30 m recommended — keeps arm arched above table</div>
-        </div>
-
-        <div class="div"></div>
-
-        <!-- End-effector readout -->
-        <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">
-          <div class="sec">End-Effector Position (FK)</div>
-          <div class="cards">
-            <div class="card axis-x"><div class="cl">x (m)</div><div class="cv" id="ox">—</div></div>
-            <div class="card axis-y"><div class="cl">y (m)</div><div class="cv" id="oy">—</div></div>
-            <div class="card axis-z"><div class="cl">z (m)</div><div class="cv" id="oz">—</div></div>
-            <div class="card has-tooltip" data-tooltip="Horizontal reach r = √(x² + y²)"><div class="cl">r (m)</div><div class="cv" id="or_">—</div></div>
-          </div>
-        </div>
-
-        <div class="div"></div>
-
-        <!-- DH table -->
-        <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">
-          <div class="sec">Denavit–Hartenberg Parameters</div>
-          <table class="dht">
-            <tr><th>i</th><th>aᵢ</th><th>αᵢ</th><th>dᵢ</th><th>θᵢ</th></tr>
-            <tr><td>1</td><td>0</td><td>π/2</td><td>L₁</td><td>θ₁★</td></tr>
-            <tr><td>2</td><td>L₂</td><td>0</td><td>0</td><td>θ₂★</td></tr>
-            <tr><td>3</td><td>L₃</td><td>0</td><td>0</td><td>θ₃★</td></tr>
-          </table>
-          <div style="font-size:10px;color:var(--muted)">L₁=0.15 m · L₂=0.30 m · L₃=0.24 m · (★ variable)</div>
-        </div>
-        <div style="padding:12px 14px"><button class="sbtn" id="resetBtn" style="background:linear-gradient(135deg,#334,#556);color:#ccc;box-shadow:none">⟲ Reset to Home Pose</button></div>
-        <div class="spacer"></div>
-      </div>
     </div>
+  </div>
+
+  <!-- Hidden elements needed by UIController (preserved to avoid null refs) -->
+  <div style="display:none">
+    <input type="range" id="xd" min="-0.15" max="0.85" value="0.28" step="0.01">
+    <input type="range" id="yd" min="-0.30" max="0.30" value="0.14" step="0.01">
+    <input type="range" id="jxd" min="-0.15" max="0.85" value="0.28" step="0.01">
+    <input type="range" id="jyd" min="-0.30" max="0.30" value="0.14" step="0.01">
+    <select id="elbow"><option value="1">Elbow-up (+)</option></select>
+    <input type="range" id="dx" min="-0.2" max="0.1" value="-0.04" step="0.01">
+    <input type="range" id="dy" min="-0.2" max="0.2" value="0.0" step="0.01">
+    <input type="range" id="dz" min="0.20" max="0.55" value="0.45" step="0.01">
+    <input type="range" id="spd" min="0.2" max="4" value="1" step="0.1">
+    <input type="range" id="hR" min="0.03" max="0.18" value="0.08" step="0.01">
+    <input type="range" id="vmax" min="0.3" max="3.0" value="1.2" step="0.1">
+    <input type="range" id="amax" min="0.5" max="6.0" value="2.0" step="0.25">
+    <input type="range" id="cfx" value="525"><input type="range" id="cfy" value="525">
+    <input type="range" id="ccx" value="320"><input type="range" id="ccy" value="240">
+    <input type="range" id="cu" value="320"><input type="range" id="cv_" value="240">
+    <input type="range" id="czw" value="0.65">
+    <input type="range" id="ctx" value="0.0"><input type="range" id="cty" value="0.50">
+    <input type="range" id="ctz" value="0.30">
+    <span id="xdv"></span><span id="ydv"></span><span id="jxdv"></span><span id="jydv"></span>
+    <span id="dxv"></span><span id="dyv"></span><span id="dzv"></span>
+    <span id="spdv"></span><span id="hRv"></span><span id="vmaxv"></span><span id="amaxv"></span>
+    <span id="cfxv"></span><span id="cfyv"></span><span id="ccxv"></span><span id="ccyv"></span>
+    <span id="cuv"></span><span id="cvv"></span><span id="czwv"></span>
+    <span id="ctxv"></span><span id="ctyv"></span><span id="ctzv"></span>
+    <span id="ik-t1"></span><span id="ik-t2"></span><span id="ik-t3"></span>
+    <span id="ik-err"></span><span id="ik-r"></span><span id="ik-z"></span><span id="ik-mu"></span>
+    <span id="ox"></span><span id="oy"></span><span id="oz"></span><span id="or_"></span>
+    <span id="j11"></span><span id="j12"></span><span id="j13"></span>
+    <span id="j21"></span><span id="j22"></span><span id="j23"></span>
+    <span id="j31"></span><span id="j32"></span><span id="j33"></span>
+    <span id="detJ"></span><span id="jmu"></span><span id="sinT3"></span><span id="jreach"></span>
+    <span id="simF"></span><span id="simE"></span><span id="simT2"></span><span id="simMu"></span>
+    <span id="simPhase"></span><span id="simS"></span><span id="simSdot"></span><span id="simSddot"></span>
+    <span id="trapLabel"></span><span id="muLabel"></span>
+    <span id="camXw"></span><span id="camYw"></span><span id="camZw"></span>
+    <span id="camRx"></span><span id="camRy"></span><span id="camRz"></span><span id="camIK"></span>
+    <div id="muBar"></div>
+    <div id="ikAlert"></div><div id="limAlert"></div><div id="singWarn"></div><div id="singWarn2"></div>
+    <div id="camAlert"></div><div id="simStats"></div>
+    <canvas id="trapCvs"></canvas><canvas id="trajCvs"></canvas>
+    <button id="camApplyBtn"></button>
+    <div id="tabBar"></div>
+    <div id="pane-ik"></div><div id="pane-jac"></div><div id="pane-sim"></div><div id="pane-cam"></div>
   </div>
 
   <script type="module" src="/src/main.js"></script>

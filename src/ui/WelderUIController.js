@@ -8,10 +8,11 @@
  * Also integrates the generic WaypointTask planner for user-defined paths.
  */
 
+import * as THREE from 'three';
 import { ik_dls, fk, jacobian, calcCartesianVelocity, WELDING_DH_CONFIG } from '../math/KinematicsNDOF.js';
 import { WeldingStateMachine } from '../logic/WeldingTask.js';
 import { WaypointTask } from '../logic/WaypointTask.js';
-import AnalyticsPanel from './AnalyticsPanel.js';
+
 import WaypointPanel from './WaypointPanel.js';
 
 const $ = id => document.getElementById(id);
@@ -43,8 +44,7 @@ export class WelderUIController {
       if (isActive) this.sm.resetTrail();
     };
 
-    // Analytics panel (lazy-mounted)
-    this._analytics = null;
+
 
     // ── Waypoint Planner ──
     this._waypointTask = new WaypointTask();
@@ -91,11 +91,51 @@ export class WelderUIController {
         this._waypointTask.mode = mode;
       },
     });
-    // Start hidden — toggled from the Tasks tab
     this._waypointPanel._ensureMounted();
     this._waypointPanel.hide();
 
+    // Raycaster for link selection
+    this._raycaster = new THREE.Raycaster();
+    this._mouse = new THREE.Vector2();
+
+    // Link card DOM refs
+    this._selectedLink = -1;
+    this._linkCard = $('linkCard');
+    this._linkSlider = $('linkCardSlider');
+    this._linkTitle = $('linkCardTitle');
+    this._linkValue = $('linkCardValue');
+    this._linkMin = $('linkCardMin');
+    this._linkMax = $('linkCardMax');
+    this._linkDefault = $('linkCardDefault');
+
+    // BroadcastChannel for math dashboard sync
+    this._mathChannel = new BroadcastChannel('jinx_math_sync');
+    // Command channel — receive FK/IK commands from dashboard
+    this._cmdChannel = new BroadcastChannel('jinx_math_cmd');
+    this._cmdChannel.onmessage = (e) => {
+      const d = e.data;
+      if (d.robot !== 'welder') return;
+      if (this.isWelding) return; // Don't interfere during task
+      if (d.type === 'fk' && d.q) {
+        this.q = [...d.q];
+        // Sync hidden FK sliders
+        for (let i = 0; i < 6; i++) {
+          const sl = $(`t${i + 1}`);
+          if (sl) sl.value = (d.q[i] * DEG).toFixed(0);
+        }
+        this._updateScene();
+        this._updateHUD();
+      } else if (d.type === 'ik' && d.target) {
+        // Welder uses DLS IK
+        const result = ik_dls(d.target, this.q, WELDING_DH_CONFIG, 200, 0.05);
+        this.q = result.q;
+        this._updateScene();
+        this._updateHUD();
+      }
+    };
+
     this._bindEvents();
+    this._bindLinkCard();
 
     // Initial render
     this._updateScene();
@@ -154,11 +194,7 @@ export class WelderUIController {
       btnWeld.addEventListener('click', () => this._toggleWelding());
     }
 
-    // Analytics button
-    const analyticsBtn = $('analyticsBtn');
-    if (analyticsBtn) {
-      analyticsBtn.addEventListener('click', () => this._toggleAnalytics());
-    }
+
 
     // Waypoint planner button
     const wpBtn = $('btn-waypoints');
@@ -167,6 +203,14 @@ export class WelderUIController {
         this._waypointPanel.toggle();
       });
     }
+
+    // Math dashboard
+    const mathBtn = $('btn-math-panel');
+    if (mathBtn) mathBtn.addEventListener('click', () => window.open('/src/pages/math-dashboard.html?robot=welder', '_blank'));
+
+    // Raycaster — link click detection
+    const dom = this.sm.renderer.domElement;
+    dom.addEventListener('pointerdown', e => this._onPointerDown(e));
   }
 
   /* ═══════════ Toggle Welding Task ═══════════ */
@@ -186,7 +230,7 @@ export class WelderUIController {
       this.stateMachine.start();
       this.isWelding = true;
       if (btn) { btn.textContent = '⏹ Stop Welding'; btn.classList.add('stop'); }
-      if (this._analytics) this._analytics.reset();
+
       this._lastTime = performance.now();
       this._runTask();
     }
@@ -249,35 +293,7 @@ export class WelderUIController {
     this._syncSliders();
     this._updateTaskUI();
 
-    // ── 7. Analytics feed (velocity + manipulability) ──
-    if (this._analytics) {
-      const { position: actualPos } = fk(this.q, WELDING_DH_CONFIG);
-      const jac = jacobian(this.q, WELDING_DH_CONFIG);
-      const n = 6;
 
-      // Manipulability μ = √det(J·Jᵀ)
-      const JJt = new Float64Array(9);
-      for (let i = 0; i < 3; i++)
-        for (let j = 0; j < 3; j++) {
-          let sum = 0;
-          for (let k = 0; k < n; k++) sum += jac.J[i * n + k] * jac.J[j * n + k];
-          JJt[i * 3 + j] = sum;
-        }
-      const d = JJt[0] * (JJt[4] * JJt[8] - JJt[5] * JJt[7])
-              - JJt[1] * (JJt[3] * JJt[8] - JJt[5] * JJt[6])
-              + JJt[2] * (JJt[3] * JJt[7] - JJt[4] * JJt[6]);
-      const mu = Math.sqrt(Math.max(0, d));
-
-      // Joint velocity q̇ = (q - qPrev) / dt
-      const safeDt = dt > 1e-6 ? dt : 1e-6;
-      const qDot = this.q.map((qi, i) => (qi - this.lastQ[i]) / safeDt);
-
-      // Cartesian velocity ṗ = Jv · q̇
-      const pDot = calcCartesianVelocity(jac.J, n, qDot);
-      const velMag = Math.sqrt(pDot[0] ** 2 + pDot[1] ** 2 + pDot[2] ** 2);
-
-      this._analytics.updateData(dt, targetXYZ, actualPos, mu, velMag);
-    }
 
     // ── 8. Store previous q for velocity computation ──
     this.lastQ = [...this.q];
@@ -330,6 +346,39 @@ export class WelderUIController {
 
     // Jacobian & Singularity metrics
     this._updateJacobian();
+
+    // ── Broadcast to Math Dashboard ──
+    const jac = jacobian(this.q, WELDING_DH_CONFIG);
+    const n = 6;
+    const J2d = [];
+    for (let r = 0; r < 3; r++) {
+      const row = [];
+      for (let c = 0; c < n; c++) row.push(jac.J[r * n + c]);
+      J2d.push(row);
+    }
+    const JJt_bc = new Float64Array(9);
+    for (let i = 0; i < 3; i++)
+      for (let j = 0; j < 3; j++) {
+        let sum = 0;
+        for (let k = 0; k < n; k++) sum += jac.J[i * n + k] * jac.J[j * n + k];
+        JJt_bc[i * 3 + j] = sum;
+      }
+    const det_bc = JJt_bc[0] * (JJt_bc[4] * JJt_bc[8] - JJt_bc[5] * JJt_bc[7])
+                 - JJt_bc[1] * (JJt_bc[3] * JJt_bc[8] - JJt_bc[5] * JJt_bc[6])
+                 + JJt_bc[2] * (JJt_bc[3] * JJt_bc[7] - JJt_bc[4] * JJt_bc[6]);
+    const mu_bc = Math.sqrt(Math.max(0, det_bc));
+    this._mathChannel.postMessage({
+      robot: 'welder',
+      q: [...this.q],
+      ee: [...position],
+      jacobian: J2d,
+      mu: mu_bc,
+      detJ: det_bc,
+      reach: Math.sqrt(position[0] ** 2 + position[1] ** 2 + position[2] ** 2),
+      error: 0,
+      converged: true,
+      status: this.isWelding ? 'welding' : 'ready'
+    });
   }
 
   /* ═══════════ Sync Sliders to Current q ═══════════ */
@@ -463,17 +512,7 @@ export class WelderUIController {
     this._syncSliders();
   }
 
-  /* ═══════════ Analytics Panel ═══════════ */
-  _toggleAnalytics() {
-    if (!this._analytics) {
-      this._analytics = new AnalyticsPanel(
-        'Welder Analytics',
-        document.getElementById('cw'),
-        20, 60
-      );
-    }
-    this._analytics.toggle();
-  }
+
 
   /* ═══════════ Waypoint Planner ═══════════ */
 
@@ -539,30 +578,102 @@ export class WelderUIController {
       this._waypointTask.currentSegment, this._waypointTask.totalSegments
     );
 
-    // Analytics feed during waypoint execution
-    if (this._analytics) {
-      const { position: actualPos } = fk(this.q, WELDING_DH_CONFIG);
-      const jac = jacobian(this.q, WELDING_DH_CONFIG);
-      const n = 6;
-      const JJt = new Float64Array(9);
-      for (let i = 0; i < 3; i++)
-        for (let j = 0; j < 3; j++) {
-          let sum = 0;
-          for (let k = 0; k < n; k++) sum += jac.J[i * n + k] * jac.J[j * n + k];
-          JJt[i * 3 + j] = sum;
-        }
-      const d = JJt[0] * (JJt[4] * JJt[8] - JJt[5] * JJt[7])
-              - JJt[1] * (JJt[3] * JJt[8] - JJt[5] * JJt[6])
-              + JJt[2] * (JJt[3] * JJt[7] - JJt[4] * JJt[6]);
-      const mu = Math.sqrt(Math.max(0, d));
-      const safeDt = dt > 1e-6 ? dt : 1e-6;
-      const qDot = this.q.map((qi, i) => (qi - this.lastQ[i]) / safeDt);
-      const pDot = calcCartesianVelocity(jac.J, n, qDot);
-      const velMag = Math.sqrt(pDot[0] ** 2 + pDot[1] ** 2 + pDot[2] ** 2);
-      this._analytics.updateData(dt, targetXYZ, actualPos, mu, velMag);
-    }
+
     this.lastQ = [...this.q];
 
     this._waypointRAF = requestAnimationFrame(() => this._runWaypointTask());
+  }
+
+  /* ═══════════ Raycaster — Link Selection ═══════════ */
+  _onPointerDown(e) {
+    if (e.button !== 0) return;
+    const rect = this.sm.renderer.domElement.getBoundingClientRect();
+    this._mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    this._mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    this._raycaster.setFromCamera(this._mouse, this.sm.camera);
+
+    // ── Check link meshes for click-to-resize ──
+    const linkHits = this._raycaster.intersectObjects(this.sm.linkMeshArray, false);
+    if (linkHits.length > 0) {
+      const hitMesh = linkHits[0].object;
+      const idx = this.sm.linkMeshes.findIndex(e => e.mesh === hitMesh);
+      if (idx >= 0) {
+        this.showLinkCard(idx);
+        return; // consume click
+      }
+    }
+
+    // ── Empty space click — dismiss card ──
+    this.hideLinkCard();
+  }
+
+  /* ═══════════ Link Card ═══════════ */
+
+  _bindLinkCard() {
+    if (!this._linkSlider || !this._linkCard) return;
+
+    // Slider drag → resize link in real time
+    this._linkSlider.addEventListener('input', () => {
+      if (this._selectedLink < 0) return;
+      const newLen = parseFloat(this._linkSlider.value);
+      this.sm.resizeLink(this._selectedLink, newLen);
+      this._linkValue.textContent = newLen.toFixed(3) + ' m';
+      // Re-run FK to update the 3D arm
+      this._updateScene();
+      this._updateHUD();
+    });
+
+    // Close button
+    const closeBtn = $('linkCardClose');
+    if (closeBtn) closeBtn.addEventListener('click', () => this.hideLinkCard());
+
+    // Reset to default
+    const resetBtn = $('linkCardReset');
+    if (resetBtn) resetBtn.addEventListener('click', () => {
+      if (this._selectedLink < 0) return;
+      const entry = this.sm.linkMeshes[this._selectedLink];
+      const defLen = entry.defaultLen;
+      this._linkSlider.value = defLen;
+      this.sm.resizeLink(this._selectedLink, defLen);
+      this._linkValue.textContent = defLen.toFixed(3) + ' m';
+      this._updateScene();
+      this._updateHUD();
+    });
+  }
+
+  /**
+   * Show the link detail card for a given link index.
+   * @param {number} index - Link index
+   */
+  showLinkCard(index) {
+    if (!this._linkCard) return;
+    const entry = this.sm.linkMeshes[index];
+    if (!entry) return;
+
+    this._selectedLink = index;
+    this.sm.highlightLink(index);
+
+    // Populate the card
+    this._linkTitle.textContent = entry.label;
+    const currentLen = WELDING_DH_CONFIG[entry.dhIndex][entry.dhKey];
+    this._linkSlider.min = entry.min;
+    this._linkSlider.max = entry.max;
+    this._linkSlider.step = 0.005;
+    this._linkSlider.value = currentLen;
+    this._linkValue.textContent = currentLen.toFixed(3) + ' m';
+    this._linkMin.textContent = entry.min.toFixed(2);
+    this._linkMax.textContent = entry.max.toFixed(2);
+    this._linkDefault.textContent = 'default: ' + entry.defaultLen.toFixed(2) + ' m';
+
+    // Show with animation
+    this._linkCard.classList.add('visible');
+  }
+
+  /** Hide the link detail card and clear the highlight */
+  hideLinkCard() {
+    if (!this._linkCard) return;
+    this._linkCard.classList.remove('visible');
+    this.sm.clearHighlight();
+    this._selectedLink = -1;
   }
 }

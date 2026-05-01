@@ -10,6 +10,7 @@ export default defineConfig({
         rrrLamp: resolve(__dirname, 'src/pages/rrr-lamp.html'),
         scara: resolve(__dirname, 'src/pages/scara.html'),
         welder: resolve(__dirname, 'src/pages/welder.html'),
+        mathDashboard: resolve(__dirname, 'src/pages/math-dashboard.html'),
       },
     },
   },

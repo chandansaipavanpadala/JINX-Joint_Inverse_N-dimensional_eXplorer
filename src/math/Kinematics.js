@@ -11,10 +11,16 @@
 
 import * as THREE from 'three';
 
-/* ═══════════════════ Constants ═══════════════════ */
+/* ═══════════════════ Constants (defaults) ═══════════════════ */
 export const L1 = 0.15;   // Base column height (m)
 export const L2 = 0.30;   // Lower arm length  (m)
 export const L3 = 0.24;   // Upper arm length  (m)
+
+/**
+ * Mutable link-length configuration for interactive resizing.
+ * FK/IK/Jacobian read from this object. Modify at runtime to resize links.
+ */
+export const linkLengths = { L1: 0.15, L2: 0.30, L3: 0.24 };
 
 /* ═══════════════════ Helpers ═══════════════════ */
 export const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -42,14 +48,15 @@ export const T3MAX = DEG(145);
  * @returns {{ x: number, y: number, z: number, r: number, P0: THREE.Vector3, P1: THREE.Vector3, P2: THREE.Vector3, P3: THREE.Vector3 }}
  */
 export function fkMat(t1, t2, t3) {
+  const { L1: l1, L2: l2, L3: l3 } = linkLengths;
   const c1 = Math.cos(t1), s1 = Math.sin(t1), c2 = Math.cos(t2), s2 = Math.sin(t2);
   const c23 = Math.cos(t2 + t3), s23 = Math.sin(t2 + t3);
-  const r = L2 * c2 + L3 * c23;
+  const r = l2 * c2 + l3 * c23;
   return {
-    x: r * c1, y: r * s1, z: L1 + L2 * s2 + L3 * s23, r,
-    P0: V3(0, 0, 0), P1: V3(0, L1, 0),
-    P2: V3(L2 * c1 * c2, L1 + L2 * s2, -L2 * s1 * c2),
-    P3: V3(r * c1, L1 + L2 * s2 + L3 * s23, -r * s1)
+    x: r * c1, y: r * s1, z: l1 + l2 * s2 + l3 * s23, r,
+    P0: V3(0, 0, 0), P1: V3(0, l1, 0),
+    P2: V3(l2 * c1 * c2, l1 + l2 * s2, -l2 * s1 * c2),
+    P3: V3(r * c1, l1 + l2 * s2 + l3 * s23, -r * s1)
   };
 }
 
@@ -69,12 +76,13 @@ export function fkMat(t1, t2, t3) {
  * @returns {{ t1: number, t2: number, t3: number } | null}
  */
 export function ikMat(xd, yd, zd, eSign = 1) {
-  const t1 = Math.atan2(yd, xd), r = Math.hypot(xd, yd), zp = zd - L1;
-  const D2 = r * r + zp * zp, C3 = (D2 - L2 * L2 - L3 * L3) / (2 * L2 * L3);
+  const { L1: l1, L2: l2, L3: l3 } = linkLengths;
+  const t1 = Math.atan2(yd, xd), r = Math.hypot(xd, yd), zp = zd - l1;
+  const D2 = r * r + zp * zp, C3 = (D2 - l2 * l2 - l3 * l3) / (2 * l2 * l3);
   if (Math.abs(C3) > 1.0001) return null;
   const C3c = clamp(C3, -1, 1), s3 = eSign * Math.sqrt(1 - C3c * C3c);
   const t3 = Math.atan2(s3, C3c);
-  const t2 = Math.atan2(zp, r) - Math.atan2(L3 * Math.sin(t3), L2 + L3 * Math.cos(t3));
+  const t2 = Math.atan2(zp, r) - Math.atan2(l3 * Math.sin(t3), l2 + l3 * Math.cos(t3));
   return { t1, t2, t3 };
 }
 
@@ -92,11 +100,12 @@ export function ikMat(xd, yd, zd, eSign = 1) {
  * @returns {number[][]} 3×3 Jacobian matrix
  */
 export function jacMat(t1, t2, t3) {
+  const { L2: l2, L3: l3 } = linkLengths;
   const c1 = Math.cos(t1), s1 = Math.sin(t1), s2 = Math.sin(t2), c2 = Math.cos(t2);
-  const s23 = Math.sin(t2 + t3), c23 = Math.cos(t2 + t3), R = L2 * c2 + L3 * c23;
-  return [[-s1 * R, -c1 * (L2 * s2 + L3 * s23), -L3 * c1 * s23],
-  [c1 * R, -s1 * (L2 * s2 + L3 * s23), -L3 * s1 * s23],
-  [0, L2 * c2 + L3 * c23, L3 * c23]];
+  const s23 = Math.sin(t2 + t3), c23 = Math.cos(t2 + t3), R = l2 * c2 + l3 * c23;
+  return [[-s1 * R, -c1 * (l2 * s2 + l3 * s23), -l3 * c1 * s23],
+  [c1 * R, -s1 * (l2 * s2 + l3 * s23), -l3 * s1 * s23],
+  [0, l2 * c2 + l3 * c23, l3 * c23]];
 }
 
 /**

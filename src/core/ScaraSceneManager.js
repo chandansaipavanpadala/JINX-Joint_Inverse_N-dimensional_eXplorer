@@ -505,11 +505,30 @@ export default class ScaraSceneManager {
     this._eeMesh.castShadow = true;
     grp.add(this._eeMesh);
 
-    // ── Vertical drop-line (visual guide) ──
+    // ── Clickable Link Mesh Registry ──
+    // Each entry: { mesh, dhIndex, dhKey, label, defaultLen, min, max }
+    // dhIndex = which row in SCARA_DH_CONFIG;  dhKey = 'a' or 'd'
+    this._linkMeshes = [
+      { mesh: this._link1, dhIndex: 0, dhKey: 'a', label: 'Upper Arm (a₁)',
+        defaultLen: L1, min: 0.10, max: 0.50 },
+      { mesh: this._link2, dhIndex: 1, dhKey: 'a', label: 'Forearm (a₂)',
+        defaultLen: L2, min: 0.08, max: 0.45 },
+    ];
+    this._highlightedLink = -1;
+    this._savedEmissive = null;
+    this._savedEmissiveIntensity = 0;
+
+    // ── Vertical drop-line (visual guide) — persistent reusable Line ──
     this._dropLineMat = new THREE.LineDashedMaterial({
       color: 0xC8A200, dashSize: 0.01, gapSize: 0.008, transparent: true, opacity: 0.4
     });
-    this._dropLine = null;
+    const dlInitGeo = new THREE.BufferGeometry().setFromPoints([V3(0,0,0), V3(0,0.01,0)]);
+    this._dropLine = new THREE.Line(dlInitGeo, this._dropLineMat);
+    this._dropLine.computeLineDistances();
+    this._scene.add(this._dropLine);
+
+    // ── Beam-line (EE → target) — persistent reusable Line ──
+    this._beamLine = null;
   }
 
   /* ════════════════════════════════════════════════════════
@@ -722,18 +741,15 @@ export default class ScaraSceneManager {
     this._eeMesh.position.set(P2.x, eeY - 0.015, P2.z);
     this._eeMesh.rotation.set(Math.PI, q[3], 0); // cone points down, rotated by q4
 
-    // ── Vertical drop-line (visual guide from housing to EE) ──
-    if (this._dropLine) {
-      this._scene.remove(this._dropLine);
-      this._dropLine.geometry.dispose();
-    }
-    const dlGeo = new THREE.BufferGeometry().setFromPoints([
+    // ── Vertical drop-line (reuse persistent Line, swap geometry only) ──
+    const oldDlGeo = this._dropLine.geometry;
+    const newDlGeo = new THREE.BufferGeometry().setFromPoints([
       V3(P2.x, shaftTopY, P2.z),
       V3(P2.x, eeY - 0.015, P2.z)
     ]);
-    this._dropLine = new THREE.Line(dlGeo, this._dropLineMat);
+    this._dropLine.geometry = newDlGeo;
     this._dropLine.computeLineDistances();
-    this._scene.add(this._dropLine);
+    oldDlGeo.dispose();
 
     // ── Target sphere + glow + beam ──
     if (pTgt3) {
@@ -954,6 +970,53 @@ export default class ScaraSceneManager {
   }
 
   /* ════════════════════════════════════════════════════════
+     Link Resizing — dynamic DH parameter + mesh updates
+     ════════════════════════════════════════════════════════ */
+
+  /**
+   * Dynamically resize a SCARA link.
+   * Updates the DH config 'a' (or 'd') parameter and rebuilds the mesh geometry.
+   * @param {number} index  - Index into _linkMeshes (0=upper arm, 1=forearm)
+   * @param {number} newLen - New length in meters
+   */
+  resizeLink(index, newLen) {
+    const entry = this._linkMeshes[index];
+    if (!entry) return;
+    // Update the mutable DH config
+    SCARA_DH_CONFIG[entry.dhIndex][entry.dhKey] = newLen;
+    // Rebuild the box geometry (SCARA arms are BoxGeometry with length along Z)
+    const oldGeo = entry.mesh.geometry;
+    const params = oldGeo.parameters;
+    entry.mesh.geometry.dispose();
+    entry.mesh.geometry = new THREE.BoxGeometry(params.width, params.height, newLen);
+  }
+
+  /**
+   * Highlight a link with emissive glow.
+   * @param {number} index - Link index to highlight
+   */
+  highlightLink(index) {
+    this.clearHighlight();
+    if (index < 0 || index >= this._linkMeshes.length) return;
+    const mat = this._linkMeshes[index].mesh.material;
+    this._savedEmissive = mat.emissive.getHex();
+    this._savedEmissiveIntensity = mat.emissiveIntensity;
+    mat.emissive.setHex(0x00e5ff);
+    mat.emissiveIntensity = 0.6;
+    this._highlightedLink = index;
+  }
+
+  /** Clear link highlight */
+  clearHighlight() {
+    if (this._highlightedLink >= 0 && this._highlightedLink < this._linkMeshes.length) {
+      const mat = this._linkMeshes[this._highlightedLink].mesh.material;
+      mat.emissive.setHex(this._savedEmissive || 0x000000);
+      mat.emissiveIntensity = this._savedEmissiveIntensity || 0;
+    }
+    this._highlightedLink = -1;
+  }
+
+  /* ════════════════════════════════════════════════════════
      Getters
      ════════════════════════════════════════════════════════ */
   get camera()       { return this._camera; }
@@ -969,6 +1032,12 @@ export default class ScaraSceneManager {
   get dropZoneMesh() { return this._dropZoneMesh; }
   get transformControls() { return this._transformControls; }
   get percCamera()   { return this._percCamera; }
+
+  /** Clickable link mesh entries (array of metadata) */
+  get linkMeshes() { return this._linkMeshes; }
+
+  /** Just the Three.js mesh objects for raycasting */
+  get linkMeshArray() { return this._linkMeshes.map(e => e.mesh); }
 
   /** Register callback for object drag sync: (mesh) => void */
   set onObjectDragged(fn) { this._onObjectDragged = fn; }

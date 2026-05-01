@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { ik_dls, fk, jacobian, SCARA_DH_CONFIG } from '../math/KinematicsNDOF.js';
 import PickAndPlaceStateMachine, { STATE, STATE_META } from '../logic/PickAndPlace.js';
-import AnalyticsPanel from './AnalyticsPanel.js';
+
 import CameraPanel from './CameraPanel.js';
 
 const $ = id => document.getElementById(id);
@@ -37,8 +37,6 @@ export default class ScaraUIController {
     // Interactive click state
     this._interactiveClickPhase = 0; // 0=none, 1=waiting pick, 2=waiting drop
 
-    // Analytics panel (lazy-mounted)
-    this._analytics = null;
 
     // ── TransformControls object selection ──
     // Mark payload as draggable
@@ -52,7 +50,41 @@ export default class ScaraUIController {
     this._cameraPanel = null;
     this._camRenderSkip = 0;
 
+    // BroadcastChannel for math dashboard sync
+    this._mathChannel = new BroadcastChannel('jinx_math_sync');
+    // Command channel — receive FK/IK commands from dashboard
+    this._cmdChannel = new BroadcastChannel('jinx_math_cmd');
+    this._cmdChannel.onmessage = (e) => {
+      const d = e.data;
+      if (d.robot !== 'scara') return;
+      if (d.type === 'fk' && d.q) {
+        this.q = [...d.q];
+        // Sync hidden FK sliders
+        $('fk-q1').value = RAD(d.q[0]).toFixed(0);
+        $('fk-q2').value = RAD(d.q[1]).toFixed(0);
+        $('fk-q3').value = (d.q[2] * 1000).toFixed(0);
+        $('fk-q4').value = RAD(d.q[3]).toFixed(0);
+        this._updateScene(null);
+      } else if (d.type === 'ik' && d.target) {
+        $('ik-xt').value = d.target[0];
+        $('ik-yt').value = d.target[1];
+        $('ik-zt').value = d.target[2];
+        this._onIKSlider();
+      }
+    };
+
+    // Link card DOM refs
+    this._selectedLink = -1;
+    this._linkCard = $('linkCard');
+    this._linkSlider = $('linkCardSlider');
+    this._linkTitle = $('linkCardTitle');
+    this._linkValue = $('linkCardValue');
+    this._linkMin = $('linkCardMin');
+    this._linkMax = $('linkCardMax');
+    this._linkDefault = $('linkCardDefault');
+
     this._bindEvents();
+    this._bindLinkCard();
   }
 
   /* ═══════════ Event Wiring ═══════════ */
@@ -94,13 +126,15 @@ export default class ScaraUIController {
     const resetBtn = $('resetBtn');
     if (resetBtn) resetBtn.addEventListener('click', () => this._resetPose());
 
-    // Analytics button
-    const analyticsBtn = $('analyticsBtn');
-    if (analyticsBtn) analyticsBtn.addEventListener('click', () => this._toggleAnalytics());
+
 
     // Camera button
     const camBtn = $('cameraBtn');
     if (camBtn) camBtn.addEventListener('click', () => this._toggleCamera());
+
+    // Math dashboard
+    const mathBtn = $('btn-math-panel');
+    if (mathBtn) mathBtn.addEventListener('click', () => window.open('/src/pages/math-dashboard.html?robot=scara', '_blank'));
   }
 
   /* ═══════════ Tabs ═══════════ */
@@ -217,9 +251,9 @@ export default class ScaraUIController {
     $('fk-q3v').textContent = (result.q[2] * 1000).toFixed(0);
     $('fk-q4v').textContent = RAD(result.q[3]).toFixed(0);
 
-    // Target sphere position: DH(x,y,z) → Three(x, z, -y)
+    // Target sphere position: DH(x,y,z) -> Three(x, z, -y)
     const pTgt3 = new THREE.Vector3(xt, zt, -yt);
-    this._updateScene(pTgt3);
+    this._updateScene(pTgt3, result);
   }
 
   /* ═══════════ Jacobian Slider Handler ═══════════ */
@@ -237,7 +271,7 @@ export default class ScaraUIController {
     this.q = result.q;
 
     const pTgt3 = new THREE.Vector3(xt, zt, -yt);
-    this._updateScene(pTgt3);
+    this._updateScene(pTgt3, result);
     this._updateJacobian();
   }
 
@@ -277,7 +311,7 @@ export default class ScaraUIController {
   }
 
   /* ═══════════ Scene + HUD Update ═══════════ */
-  _updateScene(pTgt3) {
+  _updateScene(pTgt3, ikResult) {
     const result = this.sm.updateScene(this.q, pTgt3);
     const pos = result.position;
 
@@ -311,6 +345,42 @@ export default class ScaraUIController {
       }
       this._cameraPanel.updateProjection(pos);
     }
+
+    // ── Broadcast to Math Dashboard ──
+    const jac = jacobian(this.q, SCARA_DH_CONFIG);
+    const n = jac.cols;
+    // Convert flat J to 2D array for dashboard
+    const J2d = [];
+    for (let r = 0; r < 3; r++) {
+      const row = [];
+      for (let c = 0; c < n; c++) row.push(jac.J[r * n + c]);
+      J2d.push(row);
+    }
+    // Compute manipulability
+    const JJt = new Float64Array(9);
+    for (let i = 0; i < 3; i++)
+      for (let j = 0; j < 3; j++) {
+        let sum = 0;
+        for (let k = 0; k < n; k++) sum += jac.J[i * n + k] * jac.J[j * n + k];
+        JJt[i * 3 + j] = sum;
+      }
+    const det = JJt[0] * (JJt[4] * JJt[8] - JJt[5] * JJt[7])
+              - JJt[1] * (JJt[3] * JJt[8] - JJt[5] * JJt[6])
+              + JJt[2] * (JJt[3] * JJt[7] - JJt[4] * JJt[6]);
+    const mu = Math.sqrt(Math.max(0, det));
+    this._mathChannel.postMessage({
+      robot: 'scara',
+      q: [...this.q],
+      ee: [...pos],
+      jacobian: J2d,
+      mu,
+      detJ: det,
+      reach: Math.sqrt(pos[0] ** 2 + pos[1] ** 2),
+      error: ikResult?.error ?? 0,
+      converged: ikResult?.converged ?? true,
+      iterations: ikResult?.iterations ?? 0,
+      status: ikResult ? (ikResult.converged ? 'converged' : 'failed') : 'fk'
+    });
   }
 
   /* ═══════════ Master Update (initial call) ═══════════ */
@@ -345,7 +415,7 @@ export default class ScaraUIController {
       // Start
       this.sm.resetTrail();
       this._pnp.setInitialQ([...this.q]);
-      if (this._analytics) this._analytics.reset();
+
 
       if (mode === 'interactive') {
         this._pnp.startInteractive();
@@ -407,7 +477,7 @@ export default class ScaraUIController {
 
     // DH(x,y,z) → Three(x, z, -y)
     const pTgt3 = new THREE.Vector3(info.target[0], info.target[2], -info.target[1]);
-    this._updateScene(pTgt3);
+    this._updateScene(pTgt3, { error: info.error, converged: info.converged, iterations: 0 });
 
     // Trail
     if (this.sm.eeWorldPos) this.sm.addTrailPoint(this.sm.eeWorldPos);
@@ -439,26 +509,7 @@ export default class ScaraUIController {
     $('hStat').className = 'ok';
     $('hErr').textContent = info.error.toExponential(2) + ' m';
 
-    // ── Analytics feed ──
-    if (this._analytics && this._analytics.isVisible) {
-      const { position: actualPos } = fk(this.q, SCARA_DH_CONFIG);
-      const jac = jacobian(this.q, SCARA_DH_CONFIG);
-      const n = jac.cols;
-      // Compute manipulability: μ = √(det(J·Jᵀ)) for 3×n linear Jacobian
-      const JJt = new Float64Array(9);
-      for (let i = 0; i < 3; i++)
-        for (let j = 0; j < 3; j++) {
-          let sum = 0;
-          for (let k = 0; k < n; k++) sum += jac.J[i * n + k] * jac.J[j * n + k];
-          JJt[i * 3 + j] = sum;
-        }
-      const d = JJt[0] * (JJt[4] * JJt[8] - JJt[5] * JJt[7])
-              - JJt[1] * (JJt[3] * JJt[8] - JJt[5] * JJt[6])
-              + JJt[2] * (JJt[3] * JJt[7] - JJt[4] * JJt[6]);
-      const mu = Math.sqrt(Math.max(0, d));
-      const dt = 1 / 60; // approximate frame dt
-      this._analytics.updateData(dt, info.target, actualPos, mu);
-    }
+
   }
 
   /* ═══════════ Raycaster ═══════════ */
@@ -485,6 +536,17 @@ export default class ScaraUIController {
           this._pnp.setInteractiveDrop(dhX, dhY);
         }
         return; // consume click, don't drag
+      }
+    }
+
+    // ── Check link meshes for click-to-resize ──
+    const linkHits = this._raycaster.intersectObjects(this.sm.linkMeshArray, false);
+    if (linkHits.length > 0) {
+      const hitMesh = linkHits[0].object;
+      const idx = this.sm.linkMeshes.findIndex(e => e.mesh === hitMesh);
+      if (idx >= 0) {
+        this.showLinkCard(idx);
+        return; // consume click
       }
     }
 
@@ -588,17 +650,7 @@ export default class ScaraUIController {
     }
   }
 
-  /* ═══════════ Analytics Panel ═══════════ */
-  _toggleAnalytics() {
-    if (!this._analytics) {
-      this._analytics = new AnalyticsPanel(
-        'SCARA Analytics',
-        document.getElementById('cw'),
-        20, 60
-      );
-    }
-    this._analytics.toggle();
-  }
+
 
   /* ═══════════ Perception Camera ═══════════ */
   _toggleCamera() {
@@ -636,5 +688,73 @@ export default class ScaraUIController {
     } else {
       this.sm.setPerceptionActive(false);
     }
+  }
+
+  /* ═══════════ Link Card ═══════════ */
+
+  _bindLinkCard() {
+    if (!this._linkSlider || !this._linkCard) return;
+
+    // Slider drag → resize link in real time
+    this._linkSlider.addEventListener('input', () => {
+      if (this._selectedLink < 0) return;
+      const newLen = parseFloat(this._linkSlider.value);
+      this.sm.resizeLink(this._selectedLink, newLen);
+      this._linkValue.textContent = newLen.toFixed(3) + ' m';
+      // Re-run FK to update the 3D arm
+      this._updateScene(null);
+    });
+
+    // Close button
+    const closeBtn = $('linkCardClose');
+    if (closeBtn) closeBtn.addEventListener('click', () => this.hideLinkCard());
+
+    // Reset to default
+    const resetBtn = $('linkCardReset');
+    if (resetBtn) resetBtn.addEventListener('click', () => {
+      if (this._selectedLink < 0) return;
+      const entry = this.sm.linkMeshes[this._selectedLink];
+      const defLen = entry.defaultLen;
+      this._linkSlider.value = defLen;
+      this.sm.resizeLink(this._selectedLink, defLen);
+      this._linkValue.textContent = defLen.toFixed(3) + ' m';
+      this._updateScene(null);
+    });
+  }
+
+  /**
+   * Show the link detail card for a given link index.
+   * @param {number} index - Link index
+   */
+  showLinkCard(index) {
+    if (!this._linkCard) return;
+    const entry = this.sm.linkMeshes[index];
+    if (!entry) return;
+
+    this._selectedLink = index;
+    this.sm.highlightLink(index);
+
+    // Populate the card
+    this._linkTitle.textContent = entry.label;
+    const currentLen = SCARA_DH_CONFIG[entry.dhIndex][entry.dhKey];
+    this._linkSlider.min = entry.min;
+    this._linkSlider.max = entry.max;
+    this._linkSlider.step = 0.005;
+    this._linkSlider.value = currentLen;
+    this._linkValue.textContent = currentLen.toFixed(3) + ' m';
+    this._linkMin.textContent = entry.min.toFixed(2);
+    this._linkMax.textContent = entry.max.toFixed(2);
+    this._linkDefault.textContent = 'default: ' + entry.defaultLen.toFixed(2) + ' m';
+
+    // Show with animation
+    this._linkCard.classList.add('visible');
+  }
+
+  /** Hide the link detail card and clear the highlight */
+  hideLinkCard() {
+    if (!this._linkCard) return;
+    this._linkCard.classList.remove('visible');
+    this.sm.clearHighlight();
+    this._selectedLink = -1;
   }
 }

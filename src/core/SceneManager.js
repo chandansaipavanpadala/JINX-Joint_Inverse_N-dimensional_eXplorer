@@ -12,7 +12,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { fkMat, V3, L1, L2, L3, RAD } from '../math/Kinematics.js';
+import { fkMat, V3, L1, L2, L3, RAD, linkLengths } from '../math/Kinematics.js';
 
 const TRAIL_N = 60;
 
@@ -293,18 +293,18 @@ export default class SceneManager {
     mAccent.position.set(0, 0.013, 0);
     lamp.add(mAccent);
 
-    // Column
-    const mCol = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.026, L1, 16), mb);
-    mCol.position.y = L1 / 2;
-    mCol.castShadow = true;
-    lamp.add(mCol);
+    // Column (Link 1 — base height d₁)
+    this._mCol = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.026, L1, 16), mb);
+    this._mCol.position.y = L1 / 2;
+    this._mCol.castShadow = true;
+    lamp.add(this._mCol);
 
     // Shoulder joint motor
     this._mSh = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.040, 24), mj);
     this._mSh.castShadow = true;
     lamp.add(this._mSh);
 
-    // Lower arm
+    // Lower arm (Link 2 — a₂)
     this._mLow = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, L2, 16), mb);
     this._mLow.castShadow = true;
     lamp.add(this._mLow);
@@ -314,7 +314,7 @@ export default class SceneManager {
     this._mEl.castShadow = true;
     lamp.add(this._mEl);
 
-    // Upper arm
+    // Upper arm (Link 3 — a₃)
     this._mUp = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, L3, 16), mb);
     this._mUp.castShadow = true;
     lamp.add(this._mUp);
@@ -347,6 +347,16 @@ export default class SceneManager {
     );
     this._mLC.renderOrder = 1;
     lamp.add(this._mLC);
+
+    // ── Clickable Link Mesh Registry ──
+    // Each entry: { mesh, key, label, radius, defaultLen, min, max }
+    this._linkMeshes = [
+      { mesh: this._mCol, key: 'L1', label: 'Base Column (d₁)',  radius: [0.022, 0.026], defaultLen: L1, min: 0.05, max: 0.35 },
+      { mesh: this._mLow, key: 'L2', label: 'Lower Arm (a₂)',    radius: [0.022, 0.022], defaultLen: L2, min: 0.10, max: 0.50 },
+      { mesh: this._mUp,  key: 'L3', label: 'Upper Arm (a₃)',    radius: [0.018, 0.018], defaultLen: L3, min: 0.08, max: 0.45 },
+    ];
+    this._highlightedLink = -1;
+    this._savedEmissive = null;
   }
 
   /* ════════════════════════════════════════════════════════
@@ -423,6 +433,9 @@ export default class SceneManager {
 
     const sideAx = new THREE.Vector3(-Math.sin(t1), 0, -Math.cos(t1));
     const offV = sideAx.clone().multiplyScalar(0.06);
+
+    // Column — reposition for dynamic L1
+    this._mCol.position.y = P1.y / 2;
 
     // Shoulder
     this._mSh.position.copy(P1).add(offV);
@@ -561,4 +574,53 @@ export default class SceneManager {
 
   /** Trail dot count constant */
   get TRAIL_N() { return TRAIL_N; }
+
+  /** Clickable link mesh entries (array) */
+  get linkMeshes() { return this._linkMeshes; }
+
+  /** Just the Three.js mesh objects for raycasting */
+  get linkMeshArray() { return this._linkMeshes.map(e => e.mesh); }
+
+  /* ═══════════ Link Resizing ═══════════ */
+
+  /**
+   * Dynamically resize a link's cylinder geometry.
+   * @param {number} index - Link index (0=L1, 1=L2, 2=L3)
+   * @param {number} newLen - New length in meters
+   */
+  resizeLink(index, newLen) {
+    const entry = this._linkMeshes[index];
+    if (!entry) return;
+    const [r1, r2] = entry.radius;
+    entry.mesh.geometry.dispose();
+    entry.mesh.geometry = new THREE.CylinderGeometry(r1, r2, newLen, 16);
+    // Update the mutable kinematics config
+    linkLengths[entry.key] = newLen;
+  }
+
+  /**
+   * Highlight a link with emissive glow.
+   * @param {number} index - Link index to highlight (-1 = clear)
+   */
+  highlightLink(index) {
+    // Clear previous highlight
+    this.clearHighlight();
+    if (index < 0 || index >= this._linkMeshes.length) return;
+    const mat = this._linkMeshes[index].mesh.material;
+    this._savedEmissive = mat.emissive.getHex();
+    this._savedEmissiveIntensity = mat.emissiveIntensity;
+    mat.emissive.setHex(0x00e5ff);
+    mat.emissiveIntensity = 0.6;
+    this._highlightedLink = index;
+  }
+
+  /** Clear link highlight */
+  clearHighlight() {
+    if (this._highlightedLink >= 0 && this._highlightedLink < this._linkMeshes.length) {
+      const mat = this._linkMeshes[this._highlightedLink].mesh.material;
+      mat.emissive.setHex(this._savedEmissive || 0x000000);
+      mat.emissiveIntensity = this._savedEmissiveIntensity || 0;
+    }
+    this._highlightedLink = -1;
+  }
 }

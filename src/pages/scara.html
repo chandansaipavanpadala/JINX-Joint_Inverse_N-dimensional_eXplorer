@@ -28,7 +28,7 @@
 
     <div class="body-row">
 
-      <!-- 3D Canvas -->
+      <!-- 3D Canvas (now takes full width) -->
       <div id="cw">
         <div class="hud" id="hud">
           <div><b>θ₁</b> <span id="h1">—</span>&ensp;<b>θ₂</b> <span id="h2">—</span>&ensp;<b>d₃</b> <span
@@ -38,187 +38,81 @@
           <div><b>Status</b> <span id="hStat" class="ok">—</span></div>
         </div>
         <div class="cam-hint">Drag to orbit · Scroll to zoom · Right-drag to pan</div>
+
+        <!-- ═══ Minimal Control Bar ═══ -->
+        <div class="sim-control-bar" id="simControlBar">
+          <select class="sim-select" id="taskMode">
+            <option value="auto">🔄 Auto Loop</option>
+            <option value="interactive">🖱️ Interactive Click</option>
+          </select>
+          <button class="sim-btn sim-btn-primary" id="taskBtn">▶ Run Pick & Place</button>
+          <button class="sim-btn sim-btn-secondary" id="btn-math-panel">📐 Open Math Panel</button>
+          <button class="sim-btn sim-btn-ghost" id="cameraBtn">📷 Camera</button>
+          <button class="sim-btn sim-btn-ghost" id="resetBtn">⟲ Reset</button>
+        </div>
+        <!-- Click hint overlay for interactive mode -->
+        <div class="click-hint-overlay" id="clickHint">
+          🖱️ Click on the table to set the <strong>Pick</strong> position, then click again for <strong>Drop</strong>
+        </div>
+
+        <!-- ═══ Link Detail Card (hidden by default) ═══ -->
+        <div class="link-card" id="linkCard">
+          <div class="link-card-header">
+            <span class="link-card-icon">🔗</span>
+            <span class="link-card-title" id="linkCardTitle">Link</span>
+            <button class="link-card-close" id="linkCardClose">✕</button>
+          </div>
+          <div class="link-card-body">
+            <div class="link-card-readout">
+              <span class="link-card-label">Length</span>
+              <span class="link-card-value" id="linkCardValue">0.000 m</span>
+            </div>
+            <input type="range" class="link-card-slider" id="linkCardSlider" min="0.05" max="0.50" value="0.30" step="0.005">
+            <div class="link-card-range">
+              <span id="linkCardMin">0.05</span>
+              <span class="link-card-default" id="linkCardDefault">default: 0.30 m</span>
+              <span id="linkCardMax">0.50</span>
+            </div>
+            <button class="link-card-reset" id="linkCardReset">⟲ Reset to Default</button>
+          </div>
+        </div>
       </div>
 
-      <!-- Control panel -->
-      <div class="panel">
-        <div class="tabs" id="tabBar">
-          <button class="tab active" data-tab="fk">FK</button>
-          <button class="tab" data-tab="ik">IK</button>
-          <button class="tab" data-tab="jac">Jacobian</button>
-          <button class="tab" data-tab="task">Tasks</button>
-        </div>
-
-        <!-- FK Pane — Direct Joint Control -->
-        <div class="pane on" id="pane-fk">
-          <div class="sec">Forward Kinematics — Joint Sliders</div>
-          <div class="ctrl"><label>θ₁ Base Yaw (°)</label><input type="range" id="fk-q1" min="-135" max="135"
-              value="0" step="1"><span class="val" id="fk-q1v">0</span></div>
-          <div class="ctrl"><label>θ₂ Elbow Yaw (°)</label><input type="range" id="fk-q2" min="-135" max="135"
-              value="0" step="1"><span class="val" id="fk-q2v">0</span></div>
-          <div class="ctrl"><label>d₃ Z-Stroke (mm)</label><input type="range" id="fk-q3" min="0" max="350" value="0"
-              step="1"><span class="val" id="fk-q3v">0</span></div>
-          <div class="ctrl"><label>θ₄ Tool Roll (°)</label><input type="range" id="fk-q4" min="-180" max="180"
-              value="0" step="1"><span class="val" id="fk-q4v">0</span></div>
-
-          <div class="sec">FK End-Effector Position</div>
-          <div class="cards">
-            <div class="card axis-x"><div class="cl">x (m)</div><div class="cv" id="fk-ox">—</div></div>
-            <div class="card axis-y"><div class="cl">y (m)</div><div class="cv" id="fk-oy">—</div></div>
-            <div class="card axis-z"><div class="cl">z (m)</div><div class="cv" id="fk-oz">—</div></div>
-          </div>
-        </div>
-
-        <!-- IK Pane — Target-based -->
-        <div class="pane" id="pane-ik">
-          <div class="sec">Target Position — DLS Numerical IK</div>
-          <div class="ctrl"><label>x_target (m)</label><input type="range" id="ik-xt" min="-0.55" max="0.55"
-              value="0.40" step="0.005"><span class="val" id="ik-xtv">0.40</span></div>
-          <div class="ctrl"><label>y_target (m)</label><input type="range" id="ik-yt" min="-0.55" max="0.55"
-              value="0.10" step="0.005"><span class="val" id="ik-ytv">0.10</span></div>
-          <div class="ctrl"><label>z_target (m)</label><input type="range" id="ik-zt" min="0.05" max="0.35"
-              value="0.30" step="0.005"><span class="val" id="ik-ztv">0.30</span></div>
-
-          <div class="alert" id="ikAlert">⚠ Target outside SCARA workspace</div>
-
-          <div class="sec">IK Solution q* (DLS)</div>
-          <div class="cards" style="grid-template-columns:1fr 1fr">
-            <div class="card"><div class="cl">θ₁ Base Yaw</div><div class="cv" id="ik-t1">—</div></div>
-            <div class="card"><div class="cl">θ₂ Elbow</div><div class="cv" id="ik-t2">—</div></div>
-            <div class="card"><div class="cl">d₃ Stroke</div><div class="cv" id="ik-d3">—</div></div>
-            <div class="card"><div class="cl">θ₄ Roll</div><div class="cv" id="ik-t4">—</div></div>
-          </div>
-          <div class="cards">
-            <div class="card"><div class="cl">FK Verify ‖e‖</div><div class="cv" id="ik-err">—</div></div>
-            <div class="card"><div class="cl">Converged</div><div class="cv" id="ik-conv">—</div></div>
-            <div class="card"><div class="cl">Iterations</div><div class="cv" id="ik-iter">—</div></div>
-          </div>
-
-          <div class="sec">DLS Solver Parameters</div>
-          <div class="ctrl"><label>Damping λ</label><input type="range" id="ik-lambda" min="0.01" max="0.5"
-              value="0.08" step="0.01"><span class="val" id="ik-lambdav">0.08</span></div>
-          <div class="ctrl"><label>Max Iterations</label><input type="range" id="ik-maxiter" min="20" max="500"
-              value="150" step="10"><span class="val" id="ik-maxiterv">150</span></div>
-        </div>
-
-        <!-- Jacobian Pane -->
-        <div class="pane" id="pane-jac">
-          <div class="sec">Geometric Jacobian Jv(q) — 3×4 (linear velocity)</div>
-          <div style="font-size:10px;color:var(--muted)">ṗ = Jv(q) q̇ &nbsp;·&nbsp; colors: <span
-              style="color:#40b870">pos</span> / <span style="color:#e05050">neg</span> / <span
-              style="color:var(--muted)">≈0</span> &nbsp;·&nbsp; rows: <span style="color:var(--axis-x)">X</span> <span style="color:var(--axis-y)">Y</span> <span style="color:var(--axis-z)">Z</span></div>
-          <div class="jgrid jgrid-4">
-            <div></div>
-            <div class="jh">∂/∂θ₁</div><div class="jh">∂/∂θ₂</div><div class="jh">∂/∂d₃</div><div class="jh">∂/∂θ₄</div>
-            <div class="jrow-lbl axis-x">ẋ</div><div class="jc jc-x" id="j11">—</div><div class="jc jc-x" id="j12">—</div><div class="jc jc-x" id="j13">—</div><div class="jc jc-x" id="j14">—</div>
-            <div class="jrow-lbl axis-y">ẏ</div><div class="jc jc-y" id="j21">—</div><div class="jc jc-y" id="j22">—</div><div class="jc jc-y" id="j23">—</div><div class="jc jc-y" id="j24">—</div>
-            <div class="jrow-lbl axis-z">ż</div><div class="jc jc-z" id="j31">—</div><div class="jc jc-z" id="j32">—</div><div class="jc jc-z" id="j33">—</div><div class="jc jc-z" id="j34">—</div>
-          </div>
-
-          <div class="sec">Joint Sliders (drives Jacobian)</div>
-          <div class="ctrl"><label>x_target (m)</label><input type="range" id="jxd" min="-0.55" max="0.55"
-              value="0.40" step="0.005"><span class="val" id="jxdv">0.40</span></div>
-          <div class="ctrl"><label>y_target (m)</label><input type="range" id="jyd" min="-0.55" max="0.55"
-              value="0.10" step="0.005"><span class="val" id="jydv">0.10</span></div>
-          <div class="ctrl"><label>z_target (m)</label><input type="range" id="jzd" min="0.05" max="0.35"
-              value="0.30" step="0.005"><span class="val" id="jzdv">0.30</span></div>
-        </div>
-
-        <!-- Tasks Pane -->
-        <div class="pane" id="pane-task">
-          <div class="sec">Pick & Place State Machine</div>
-          <div class="info-box">
-            Automated pick-and-place cycle using DLS IK.<br>
-            <b style="color:var(--gold)">Idle → Pre-grasp → Grasp → Lift → Transfer → Place → Return</b><br>
-            <span style="opacity:.7">Cubic ease-in-out interpolation · Cartesian-space waypoints</span>
-          </div>
-
-          <div class="sec">Mode</div>
-          <div class="ctrl"><label>Task Mode</label>
-            <select id="taskMode" class="sel">
-              <option value="auto">Auto Loop (ping-pong)</option>
-              <option value="interactive">Interactive Click</option>
-            </select>
-          </div>
-
-          <button class="sbtn" id="taskBtn">▶  Start Pick & Place</button>
-          <button class="sbtn" id="analyticsBtn" style="background:linear-gradient(135deg,#6c5ce7,#a855f7);color:#fff;box-shadow:0 4px 15px rgba(108,92,231,0.3);margin-top:6px">📈  Open Analytics</button>
-          <button class="sbtn" id="cameraBtn" style="background:linear-gradient(135deg,#00b894,#00cec9);color:#fff;box-shadow:0 4px 15px rgba(0,184,148,0.3);margin-top:6px">📷  Perception Camera</button>
-          <div id="clickHint" class="info-box" style="display:none;margin-top:4px">
-            <b style="color:var(--cyan)">Click 1:</b> Click on table to place payload.<br>
-            <b style="color:var(--accent)">Click 2:</b> Click on table to set drop zone.
-          </div>
-
-          <div class="sec">Live Status</div>
-          <div class="cards" style="grid-template-columns:1fr 1fr">
-            <div class="card"><div class="cl">State</div><div class="cv" id="task-state" style="font-size:11px">IDLE</div></div>
-            <div class="card"><div class="cl">Cycle</div><div class="cv" id="task-cycle">0</div></div>
-          </div>
-          <div class="cards">
-            <div class="card"><div class="cl">Progress</div><div class="cv" id="task-progress">—</div></div>
-            <div class="card"><div class="cl">IK Error</div><div class="cv" id="task-err">—</div></div>
-          </div>
-          <div class="cards" style="grid-template-columns:1fr">
-            <div class="card"><div class="cl">Target (DH frame)</div><div class="cv" id="task-target" style="font-size:11px">—</div></div>
-          </div>
-
-          <!-- Progress bar -->
-          <div class="mu-bar-wrap"><div class="mu-bar" id="taskBar" style="width:0%;background:var(--gold)"></div></div>
-          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted)">
-            <span>Start</span><span id="taskBarLabel">Phase progress</span><span>End</span>
-          </div>
-
-          <div class="sec">Waypoint Configuration</div>
-          <div class="cards" style="grid-template-columns:1fr">
-            <div class="card"><div class="cl">📦 Payload Position (DH)</div><div class="cv" id="task-pick" style="font-size:11px">(0.40, 0.15, 0.35)</div></div>
-          </div>
-          <div class="cards" style="grid-template-columns:1fr">
-            <div class="card"><div class="cl">🎯 Drop Zone Position (DH)</div><div class="cv" id="task-drop" style="font-size:11px">(0.30, -0.20, 0.35)</div></div>
-          </div>
-        </div>
-
-        <div class="div"></div>
-
-        <!-- End-effector readout (always visible) -->
-        <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">
-          <div class="sec">End-Effector Position (FK)</div>
-          <div class="cards">
-            <div class="card axis-x"><div class="cl">x (m)</div><div class="cv" id="ox">—</div></div>
-            <div class="card axis-y"><div class="cl">y (m)</div><div class="cv" id="oy">—</div></div>
-            <div class="card axis-z"><div class="cl">z (m)</div><div class="cv" id="oz">—</div></div>
-          </div>
-        </div>
-
-        <div class="div"></div>
-
-        <!-- DH table -->
-        <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">
-          <div class="sec">Denavit–Hartenberg Parameters (SCARA)</div>
-          <table class="dht">
-            <tr><th>i</th><th>aᵢ</th><th>αᵢ</th><th>dᵢ</th><th>θᵢ</th><th>Type</th></tr>
-            <tr><td>1</td><td>0.30</td><td>0</td><td>0.35</td><td>θ₁★</td><td>R</td></tr>
-            <tr><td>2</td><td>0.25</td><td>π</td><td>0</td><td>θ₂★</td><td>R</td></tr>
-            <tr><td>3</td><td>0</td><td>0</td><td>d₃★</td><td>0</td><td>P</td></tr>
-            <tr><td>4</td><td>0</td><td>0</td><td>0</td><td>θ₄★</td><td>R</td></tr>
-          </table>
-          <div style="font-size:10px;color:var(--muted)">L₁=0.30 m · L₂=0.25 m · d₁=0.35 m · Stroke: 0–350 mm · (★ variable)</div>
-        </div>
-
-        <!-- Joint limits -->
-        <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">
-          <div class="sec">Joint Limits (Physical)</div>
-          <table class="dht">
-            <tr><th>Joint</th><th>Min</th><th>Max</th><th>Type</th></tr>
-            <tr><td>θ₁ Base Yaw</td><td>−135°</td><td>+135°</td><td>Revolute</td></tr>
-            <tr><td>θ₂ Elbow</td><td>−135°</td><td>+135°</td><td>Revolute</td></tr>
-            <tr><td>d₃ Stroke</td><td>0 mm</td><td>350 mm</td><td>Prismatic</td></tr>
-            <tr><td>θ₄ Tool Roll</td><td>−180°</td><td>+180°</td><td>Revolute</td></tr>
-          </table>
-        </div>
-        <div style="padding:12px 14px"><button class="sbtn" id="resetBtn" style="background:linear-gradient(135deg,#334,#556);color:#ccc;box-shadow:none">⟲ Reset to Home Pose</button></div>
-        <div class="spacer"></div>
-      </div>
     </div>
+  </div>
+
+  <!-- Hidden elements needed by ScaraUIController (preserved to avoid null refs) -->
+  <div style="display:none">
+    <div id="tabBar"></div>
+    <div id="pane-fk"></div><div id="pane-ik"></div><div id="pane-jac"></div><div id="pane-task"></div>
+    <input type="range" id="fk-q1" min="-135" max="135" value="0" step="1">
+    <input type="range" id="fk-q2" min="-135" max="135" value="0" step="1">
+    <input type="range" id="fk-q3" min="0" max="350" value="0" step="1">
+    <input type="range" id="fk-q4" min="-180" max="180" value="0" step="1">
+    <span id="fk-q1v">0</span><span id="fk-q2v">0</span><span id="fk-q3v">0</span><span id="fk-q4v">0</span>
+    <input type="range" id="ik-xt" min="-0.55" max="0.55" value="0.40" step="0.005">
+    <input type="range" id="ik-yt" min="-0.55" max="0.55" value="0.10" step="0.005">
+    <input type="range" id="ik-zt" min="0.05" max="0.35" value="0.30" step="0.005">
+    <input type="range" id="ik-lambda" min="0.01" max="0.5" value="0.08" step="0.01">
+    <input type="range" id="ik-maxiter" min="20" max="500" value="150" step="10">
+    <span id="ik-xtv"></span><span id="ik-ytv"></span><span id="ik-ztv"></span>
+    <span id="ik-lambdav"></span><span id="ik-maxiterv"></span>
+    <span id="ik-t1"></span><span id="ik-t2"></span><span id="ik-d3"></span><span id="ik-t4"></span>
+    <span id="ik-err"></span><span id="ik-conv"></span><span id="ik-iter"></span>
+    <span id="fk-ox"></span><span id="fk-oy"></span><span id="fk-oz"></span>
+    <span id="ox"></span><span id="oy"></span><span id="oz"></span>
+    <span id="j11"></span><span id="j12"></span><span id="j13"></span><span id="j14"></span>
+    <span id="j21"></span><span id="j22"></span><span id="j23"></span><span id="j24"></span>
+    <span id="j31"></span><span id="j32"></span><span id="j33"></span><span id="j34"></span>
+    <input type="range" id="jxd" min="-0.55" max="0.55" value="0.40" step="0.005">
+    <input type="range" id="jyd" min="-0.55" max="0.55" value="0.10" step="0.005">
+    <input type="range" id="jzd" min="0.05" max="0.35" value="0.30" step="0.005">
+    <span id="jxdv"></span><span id="jydv"></span><span id="jzdv"></span>
+    <div id="ikAlert"></div>
+    <span id="task-state">IDLE</span><span id="task-cycle">0</span>
+    <span id="task-progress">—</span><span id="task-err">—</span><span id="task-target">—</span>
+    <span id="task-pick">(0.40, 0.15, 0.35)</span><span id="task-drop">(0.35, 0.10, 0.35)</span>
+    <div id="taskBar" style="width:0%"></div><span id="taskBarLabel"></span>
   </div>
 
   <script type="module" src="/src/scara-main.js"></script>

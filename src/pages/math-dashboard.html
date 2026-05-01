@@ -1,0 +1,2312 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Math Dashboard — JINX Simulator</title>
+
+  <meta name="description"
+
+    content="JINX Math Dashboard: Real-time FK, IK, Jacobian matrices, and analytics for robotic arm simulators.">
+
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+
+  <link
+
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+
+    rel="stylesheet">
+
+  <style>
+
+    :root {
+
+      --bg: #04040a;
+
+      --bg2: rgba(15, 15, 28, 0.72);
+
+      --bg3: rgba(24, 24, 40, 0.85);
+
+      --border: rgba(255, 255, 255, 0.08);
+
+      --text: #f0f0f5;
+
+      --muted: #8080a8;
+
+      --gold: #ffcc00;
+
+      --cyan: #00e5ff;
+
+      --grn: #00f07f;
+
+      --red2: #ff4d4d;
+
+      --accent: #6c5ce7;
+
+      --panel-blur: 18px;
+
+      --axis-x: #ff5c5c;
+
+      --axis-x-bg: rgba(255, 92, 92, 0.08);
+
+      --axis-x-border: rgba(255, 92, 92, 0.35);
+
+      --axis-y: #4ddf6f;
+
+      --axis-y-bg: rgba(77, 223, 111, 0.08);
+
+      --axis-y-border: rgba(77, 223, 111, 0.35);
+
+      --axis-z: #4da6ff;
+
+      --axis-z-bg: rgba(77, 166, 255, 0.08);
+
+      --axis-z-border: rgba(77, 166, 255, 0.35);
+
+    }
+
+
+
+    * {
+
+      box-sizing: border-box;
+
+      margin: 0;
+
+      padding: 0;
+
+    }
+
+
+
+    html,
+
+    body {
+
+      height: 100%;
+
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+
+      font-size: 13px;
+
+      color: var(--text);
+
+      background: var(--bg);
+
+      -webkit-font-smoothing: antialiased;
+
+    }
+
+
+
+    /* ====== Page Layout ====== */
+
+    .page {
+
+      display: flex;
+
+      flex-direction: column;
+
+      min-height: 100vh;
+
+    }
+
+
+
+    /* ====== Header ====== */
+
+    .hbar {
+
+      display: flex;
+
+      align-items: center;
+
+      gap: 12px;
+
+      padding: 14px 28px;
+
+      background: rgba(10, 10, 20, 0.6);
+
+      backdrop-filter: blur(10px);
+
+      border-bottom: 1px solid var(--border);
+
+      flex-shrink: 0;
+
+      z-index: 10;
+
+    }
+
+
+
+    .htitle {
+
+      font-size: 16px;
+
+      font-weight: 700;
+
+      letter-spacing: -0.01em;
+
+      color: #fff;
+
+    }
+
+
+
+    .hsub {
+
+      font-size: 11px;
+
+      color: var(--muted);
+
+      margin-top: 2px;
+
+    }
+
+
+
+    .badge {
+
+      padding: 3px 10px;
+
+      border-radius: 20px;
+
+      font-size: 9px;
+
+      font-weight: 700;
+
+      background: rgba(108, 92, 231, 0.12);
+
+      color: var(--accent);
+
+      border: 1px solid rgba(108, 92, 231, 0.25);
+
+      margin-left: 10px;
+
+      text-transform: uppercase;
+
+      letter-spacing: 0.05em;
+
+    }
+
+
+
+
+
+
+
+    /* ====== Grid Dashboard ====== */
+
+    .dashboard {
+
+      flex: 1;
+
+      display: grid;
+
+      grid-template-columns: 1fr 1fr;
+
+      grid-template-rows: 1fr 1fr;
+
+      gap: 16px;
+
+      padding: 20px;
+
+      overflow: auto;
+
+    }
+
+
+
+    /* ====== Panel Card ====== */
+
+    .panel-card {
+
+      background: rgba(10, 10, 22, 0.82);
+
+      backdrop-filter: blur(22px);
+
+      border: 1px solid var(--border);
+
+      border-radius: 16px;
+
+      display: flex;
+
+      flex-direction: column;
+
+      overflow: hidden;
+
+      transition: border-color 0.3s, box-shadow 0.3s;
+
+    }
+
+
+
+    .panel-card:hover {
+
+      border-color: rgba(255, 255, 255, 0.12);
+
+      box-shadow: 0 12px 48px rgba(0, 0, 0, 0.3);
+
+    }
+
+
+
+    .panel-header {
+
+      display: flex;
+
+      align-items: center;
+
+      gap: 10px;
+
+      padding: 14px 20px;
+
+      background: rgba(255, 255, 255, 0.025);
+
+      border-bottom: 1px solid var(--border);
+
+    }
+
+
+
+    .panel-icon {
+
+      font-size: 16px;
+
+      width: 24px;
+
+      text-align: center;
+
+    }
+
+
+
+    .panel-title {
+
+      font-size: 11px;
+
+      font-weight: 700;
+
+      text-transform: uppercase;
+
+      letter-spacing: 0.1em;
+
+      color: var(--muted);
+
+    }
+
+
+
+    .panel-status {
+
+      margin-left: auto;
+
+      font-size: 10px;
+
+      font-family: 'JetBrains Mono', monospace;
+
+      color: var(--grn);
+
+      background: rgba(0, 240, 127, 0.08);
+
+      padding: 3px 10px;
+
+      border-radius: 12px;
+
+      border: 1px solid rgba(0, 240, 127, 0.15);
+
+    }
+
+
+
+    .panel-body {
+
+      flex: 1;
+
+      padding: 18px 20px;
+
+      display: flex;
+
+      flex-direction: column;
+
+      gap: 16px;
+
+      overflow-y: auto;
+
+      scrollbar-width: thin;
+
+      scrollbar-color: var(--border) transparent;
+
+    }
+
+
+
+    .panel-body::-webkit-scrollbar {
+
+      width: 4px;
+
+    }
+
+
+
+    .panel-body::-webkit-scrollbar-thumb {
+
+      background: var(--border);
+
+      border-radius: 10px;
+
+    }
+
+
+
+    /* ====== Section Headers ====== */
+
+    .sec {
+
+      font-size: 10px;
+
+      font-weight: 800;
+
+      color: var(--muted);
+
+      text-transform: uppercase;
+
+      letter-spacing: 0.12em;
+
+      margin-bottom: 2px;
+
+      display: flex;
+
+      align-items: center;
+
+      gap: 8px;
+
+    }
+
+
+
+    .sec::after {
+
+      content: "";
+
+      flex: 1;
+
+      height: 1px;
+
+      background: var(--border);
+
+    }
+
+
+
+    /* ====== Cards Grid ====== */
+
+    .cards {
+
+      display: grid;
+
+      grid-template-columns: 1fr 1fr;
+
+      gap: 8px;
+
+    }
+
+
+
+    .cards-3 {
+
+      grid-template-columns: 1fr 1fr 1fr;
+
+    }
+
+
+
+    .cards-4 {
+
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+
+    }
+
+
+
+    .card {
+
+      background: rgba(0, 0, 0, 0.2);
+
+      border-radius: 8px;
+
+      padding: 10px 12px;
+
+      border: 1px solid var(--border);
+
+      transition: border-color 0.2s;
+
+    }
+
+
+
+    .card:hover {
+
+      border-color: rgba(255, 255, 255, 0.15);
+
+    }
+
+
+
+    .cl {
+
+      font-size: 9px;
+
+      color: var(--muted);
+
+      text-transform: uppercase;
+
+      letter-spacing: 0.05em;
+
+      margin-bottom: 4px;
+
+    }
+
+
+
+    .cv {
+
+      font-size: 14px;
+
+      font-weight: 600;
+
+      color: #fff;
+
+      font-family: 'JetBrains Mono', monospace;
+
+      font-variant-numeric: tabular-nums;
+
+    }
+
+
+
+    /* Axis-colored cards */
+
+    .card.axis-x {
+
+      border-left: 3px solid var(--axis-x);
+
+      background: var(--axis-x-bg);
+
+    }
+
+
+
+    .card.axis-x .cl {
+
+      color: var(--axis-x);
+
+    }
+
+
+
+    .card.axis-y {
+
+      border-left: 3px solid var(--axis-y);
+
+      background: var(--axis-y-bg);
+
+    }
+
+
+
+    .card.axis-y .cl {
+
+      color: var(--axis-y);
+
+    }
+
+
+
+    .card.axis-z {
+
+      border-left: 3px solid var(--axis-z);
+
+      background: var(--axis-z-bg);
+
+    }
+
+
+
+    .card.axis-z .cl {
+
+      color: var(--axis-z);
+
+    }
+
+
+
+    /* ====== Controls ====== */
+
+    .ctrl {
+
+      display: flex;
+
+      flex-direction: column;
+
+      gap: 6px;
+
+    }
+
+
+
+    .ctrl label {
+
+      font-size: 12px;
+
+      color: var(--text);
+
+      font-weight: 400;
+
+    }
+
+
+
+    .ctrl input[type=range] {
+
+      flex: 1;
+
+      -webkit-appearance: none;
+
+      height: 3px;
+
+      background: rgba(255, 255, 255, 0.1);
+
+      border-radius: 2px;
+
+      outline: none;
+
+    }
+
+
+
+    .ctrl input[type=range]::-webkit-slider-thumb {
+
+      -webkit-appearance: none;
+
+      width: 14px;
+
+      height: 14px;
+
+      border-radius: 50%;
+
+      background: var(--gold);
+
+      cursor: pointer;
+
+      border: 3px solid #1a1a2e;
+
+      box-shadow: 0 0 10px rgba(255, 204, 0, 0.3);
+
+      transition: transform 0.1s;
+
+    }
+
+
+
+    .ctrl input[type=range]:active::-webkit-slider-thumb {
+
+      transform: scale(1.2);
+
+    }
+
+
+
+    .val {
+
+      min-width: 54px;
+
+      text-align: right;
+
+      font-size: 11px;
+
+      font-family: 'JetBrains Mono', monospace;
+
+      color: var(--gold);
+
+      font-weight: 600;
+
+      background: rgba(0, 0, 0, 0.2);
+
+      padding: 3px 8px;
+
+      border-radius: 4px;
+
+      font-variant-numeric: tabular-nums;
+
+    }
+
+
+
+    /* ====== Jacobian Grid ====== */
+
+    .jgrid {
+
+      display: grid;
+
+      grid-template-columns: 28px repeat(3, 1fr);
+
+      gap: 5px;
+
+      padding: 4px 0;
+
+    }
+
+
+
+    .jgrid-4 {
+
+      display: grid;
+
+      grid-template-columns: 28px repeat(4, 1fr);
+
+      gap: 5px;
+
+      padding: 4px 0;
+
+    }
+
+
+
+    .jgrid-6 {
+
+      display: grid;
+
+      grid-template-columns: 28px repeat(6, 1fr);
+
+      gap: 4px;
+
+      padding: 4px 0;
+
+    }
+
+
+
+    .jh {
+
+      font-size: 9px;
+
+      color: var(--muted);
+
+      text-align: center;
+
+      font-weight: 700;
+
+      padding: 4px 0;
+
+      letter-spacing: 0.02em;
+
+    }
+
+
+
+    .jrow-lbl {
+
+      font-size: 11px;
+
+      font-weight: 700;
+
+      display: flex;
+
+      align-items: center;
+
+      justify-content: center;
+
+      border-radius: 4px;
+
+      padding: 2px;
+
+    }
+
+
+
+    .jrow-lbl.axis-x {
+
+      color: var(--axis-x);
+
+      background: var(--axis-x-bg);
+
+    }
+
+
+
+    .jrow-lbl.axis-y {
+
+      color: var(--axis-y);
+
+      background: var(--axis-y-bg);
+
+    }
+
+
+
+    .jrow-lbl.axis-z {
+
+      color: var(--axis-z);
+
+      background: var(--axis-z-bg);
+
+    }
+
+
+
+    .jc {
+
+      border-radius: 6px;
+
+      padding: 8px 4px;
+
+      font-size: 11px;
+
+      font-family: 'JetBrains Mono', monospace;
+
+      background: rgba(0, 0, 0, 0.2);
+
+      border: 1px solid var(--border);
+
+      text-align: center;
+
+      font-variant-numeric: tabular-nums;
+
+      transition: background 0.2s, color 0.2s;
+
+      letter-spacing: -0.02em;
+
+      min-width: 0;
+
+    }
+
+
+
+    .jc.jc-x {
+
+      border-top: 2px solid var(--axis-x-border);
+
+    }
+
+
+
+    .jc.jc-y {
+
+      border-top: 2px solid var(--axis-y-border);
+
+    }
+
+
+
+    .jc.jc-z {
+
+      border-top: 2px solid var(--axis-z-border);
+
+    }
+
+
+
+    /* ====== Manipulability Bar ====== */
+
+    .mu-bar-wrap {
+
+      background: rgba(0, 0, 0, 0.3);
+
+      border-radius: 20px;
+
+      height: 8px;
+
+      overflow: hidden;
+
+      border: 1px solid var(--border);
+
+    }
+
+
+
+    .mu-bar {
+
+      height: 100%;
+
+      border-radius: 20px;
+
+      transition: width 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+
+    }
+
+
+
+    /* ====== DH Table ====== */
+
+    .dht {
+
+      border-collapse: separate;
+
+      border-spacing: 0;
+
+      width: 100%;
+
+      border-radius: 8px;
+
+      overflow: hidden;
+
+      border: 1px solid var(--border);
+
+    }
+
+
+
+    .dht th {
+
+      background: rgba(255, 255, 255, 0.05);
+
+      color: var(--muted);
+
+      font-weight: 700;
+
+      font-size: 9px;
+
+      text-transform: uppercase;
+
+      padding: 8px;
+
+      text-align: center;
+
+    }
+
+
+
+    .dht td {
+
+      background: transparent;
+
+      color: var(--text);
+
+      font-family: 'JetBrains Mono', monospace;
+
+      font-size: 11px;
+
+      padding: 8px;
+
+      border-top: 1px solid var(--border);
+
+      text-align: center;
+
+      font-variant-numeric: tabular-nums;
+
+    }
+
+
+
+    /* ====== Analytics Canvas ====== */
+
+    .analytics-canvas {
+
+      width: 100% !important;
+
+      height: 100% !important;
+
+    }
+
+
+
+    .chart-wrap {
+
+      position: relative;
+
+      width: 100%;
+
+      height: 150px;
+
+      background: rgba(0, 0, 0, 0.25);
+
+      border-radius: 10px;
+
+      border: 1px solid var(--border);
+
+      padding: 4px;
+
+      margin-bottom: 6px;
+
+    }
+
+
+
+    /* ====== Placeholder State ====== */
+
+    .placeholder-msg {
+
+      display: flex;
+
+      flex-direction: column;
+
+      align-items: center;
+
+      justify-content: center;
+
+      gap: 12px;
+
+      flex: 1;
+
+      text-align: center;
+
+      color: var(--muted);
+
+    }
+
+
+
+    .placeholder-msg .icon {
+
+      font-size: 36px;
+
+      opacity: 0.4;
+
+    }
+
+
+
+    .placeholder-msg p {
+
+      font-size: 12px;
+
+      line-height: 1.6;
+
+      max-width: 280px;
+
+    }
+
+
+
+    .placeholder-msg .hint {
+
+      font-size: 10px;
+
+      color: rgba(128, 128, 168, 0.6);
+
+    }
+
+
+
+    /* ====== Alert ====== */
+
+    .alert {
+
+      padding: 10px 14px;
+
+      border-radius: 8px;
+
+      font-size: 11px;
+
+      background: rgba(255, 77, 77, 0.1);
+
+      border: 1px solid rgba(255, 77, 77, 0.2);
+
+      color: #ff9999;
+
+      display: none;
+
+      line-height: 1.4;
+
+    }
+
+
+
+    .alert.on {
+
+      display: block;
+
+    }
+
+
+
+    /* ====== Responsive: stack on narrow screens ====== */
+
+    @media (max-width: 960px) {
+
+      .dashboard {
+
+        grid-template-columns: 1fr;
+
+        grid-template-rows: auto;
+
+      }
+
+    }
+
+  </style>
+
+</head>
+
+
+
+<body>
+
+  <div class="page">
+
+
+
+    <!-- Header -->
+
+    <div class="hbar">
+
+      <div>
+
+        <div class="htitle">JINX Math Dashboard<span class="badge">Live Readout</span></div>
+
+        <div class="hsub">Forward Kinematics · Inverse Kinematics · Jacobian Analysis · Analytics</div>
+
+      </div>
+
+    </div>
+
+
+
+    <!-- 2×2 Grid Dashboard -->
+
+    <div class="dashboard">
+
+
+
+      <!-- ===== PANEL 1: Forward Kinematics ===== -->
+
+      <div class="panel-card" id="panel-fk">
+
+        <div class="panel-header">
+
+          <span class="panel-icon">&mdash;</span>
+
+          <span class="panel-title">Forward Kinematics</span>
+
+          <span class="panel-status" id="fk-status">Idle</span>
+
+        </div>
+
+        <div class="panel-body">
+
+          <div class="sec">End-Effector Position</div>
+
+          <div class="cards cards-3">
+
+            <div class="card axis-x">
+
+              <div class="cl">X (m)</div>
+
+              <div class="cv" id="md-fk-x">—</div>
+
+            </div>
+
+            <div class="card axis-y">
+
+              <div class="cl">Y (m)</div>
+
+              <div class="cv" id="md-fk-y">—</div>
+
+            </div>
+
+            <div class="card axis-z">
+
+              <div class="cl">Z (m)</div>
+
+              <div class="cv" id="md-fk-z">—</div>
+
+            </div>
+
+          </div>
+
+
+
+          <div class="sec">Joint Configuration</div>
+
+          <div class="cards cards-3" id="md-joint-cards">
+
+            <div class="card">
+
+              <div class="cl">&mdash;</div>
+
+              <div class="cv" id="md-q1">0.0°</div>
+
+            </div>
+
+            <div class="card">
+
+              <div class="cl">&mdash;</div>
+
+              <div class="cv" id="md-q2">0.0°</div>
+
+            </div>
+
+            <div class="card">
+
+              <div class="cl">&mdash;</div>
+
+              <div class="cv" id="md-q3">0.0°</div>
+
+            </div>
+
+          </div>
+
+
+
+          <div class="sec">Joint Control <span style="font-weight:400;text-transform:none;letter-spacing:0">→ sliders
+
+              update the robot live</span></div>
+
+          <div id="md-fk-sliders">
+
+            <!-- Dynamically generated per robot DOF by applyRobotLayout() -->
+
+          </div>
+
+
+
+          <div class="sec">DH Parameters</div>
+
+          <table class="dht" id="md-dh-table">
+
+            <tr>
+
+              <th>i</th>
+
+              <th>aᵢ</th>
+
+              <th>αᵢ</th>
+
+              <th>dᵢ</th>
+
+              <th>θᵢ</th>
+
+            </tr>
+
+            <tr>
+
+              <td>1</td>
+
+              <td>0</td>
+
+              <td>π/2</td>
+
+              <td>L₁</td>
+
+              <td>θ*</td>
+
+            </tr>
+
+            <tr>
+
+              <td>2</td>
+
+              <td>L₂</td>
+
+              <td>0</td>
+
+              <td>0</td>
+
+              <td>θ*</td>
+
+            </tr>
+
+            <tr>
+
+              <td>3</td>
+
+              <td>L₃</td>
+
+              <td>0</td>
+
+              <td>0</td>
+
+              <td>θ*</td>
+
+            </tr>
+
+          </table>
+
+          <div style="font-size:10px;color:var(--muted)" id="md-dh-note">L₁=0.15 m · L₂=0.30 m · L₃=0.24 m · (θ
+
+            variable)</div>
+
+        </div>
+
+      </div>
+
+
+
+      <!-- ===== PANEL 2: Inverse Kinematics ===== -->
+
+      <div class="panel-card" id="panel-ik">
+
+        <div class="panel-header">
+
+          <span class="panel-icon">&mdash;</span>
+
+          <span class="panel-title">Inverse Kinematics</span>
+
+          <span class="panel-status" id="ik-status">Idle</span>
+
+        </div>
+
+        <div class="panel-body">
+
+          <div class="sec">Target Position</div>
+
+          <div class="ctrl"><label>x_target (m)</label><input type="range" id="md-ik-xt" min="-0.55" max="0.85"
+
+              value="0.28" step="0.01"><span class="val" id="md-ik-xtv">0.28</span></div>
+
+          <div class="ctrl"><label>y_target (m)</label><input type="range" id="md-ik-yt" min="-0.55" max="0.55"
+
+              value="0.14" step="0.01"><span class="val" id="md-ik-ytv">0.14</span></div>
+
+          <div class="ctrl"><label>z_target (m)</label><input type="range" id="md-ik-zt" min="0.0" max="0.60"
+
+              value="0.47" step="0.01"><span class="val" id="md-ik-ztv">0.47</span></div>
+
+
+
+          <div class="alert" id="md-ik-alert">⚠ Target outside workspace</div>
+
+
+
+          <div class="sec">IK Solution q*</div>
+
+          <div class="cards cards-3" id="md-ik-sol-cards">
+
+            <div class="card">
+
+              <div class="cl">θ₁ Yaw</div>
+
+              <div class="cv" id="md-ik-t1">—</div>
+
+            </div>
+
+            <div class="card">
+
+              <div class="cl">θ₂ Shoulder</div>
+
+              <div class="cv" id="md-ik-t2">—</div>
+
+            </div>
+
+            <div class="card">
+
+              <div class="cl">θ₃ Elbow</div>
+
+              <div class="cv" id="md-ik-t3">—</div>
+
+            </div>
+
+          </div>
+
+          <div class="cards cards-3">
+
+            <div class="card">
+
+              <div class="cl">FK Verify |e|</div>
+
+              <div class="cv" id="md-ik-err">&mdash;</div>
+
+            </div>
+
+            <div class="card">
+
+              <div class="cl">Converged</div>
+
+              <div class="cv" id="md-ik-conv">&mdash;</div>
+
+            </div>
+
+            <div class="card">
+
+              <div class="cl">Iterations</div>
+
+              <div class="cv" id="md-ik-iter">&mdash;</div>
+
+            </div>
+
+          </div>
+
+
+
+          <div class="sec">Solver Parameters</div>
+
+          <div class="cards">
+
+            <div class="card">
+
+              <div class="cl">Reach r</div>
+
+              <div class="cv" id="md-ik-reach">&mdash;</div>
+
+            </div>
+
+            <div class="card">
+
+              <div class="cl">Damping Lambda</div>
+
+              <div class="cv" id="md-ik-lambda">&mdash;</div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+
+      <!-- ===== PANEL 3: Jacobian Matrix ===== -->
+
+      <div class="panel-card" id="panel-jac">
+
+        <div class="panel-header">
+
+          <span class="panel-icon">&mdash;</span>
+
+          <span class="panel-title">Jacobian & Singularity</span>
+
+          <span class="panel-status" id="jac-status">Idle</span>
+
+        </div>
+
+        <div class="panel-body">
+
+          <div class="sec">Analytical Jacobian J(q)</div>
+
+          <div style="font-size:10px;color:var(--muted)">ẋ = J(q) q̇ &nbsp;·&nbsp; colors:
+
+            <span style="color:#40b870">pos</span> / <span style="color:#e05050">neg</span> /
+
+            <span style="color:var(--muted)">≈0</span> &nbsp;·&nbsp; rows:
+
+            <span style="color:var(--axis-x)">X</span>
+
+            <span style="color:var(--axis-y)">Y</span>
+
+            <span style="color:var(--axis-z)">Z</span>
+
+          </div>
+
+          <div class="jgrid" id="md-jac-grid">
+
+            <div></div>
+
+            <div class="jh">∂/∂θ</div>
+
+            <div class="jh">∂/∂θ</div>
+
+            <div class="jh">∂/∂θ</div>
+
+            <div class="jrow-lbl axis-x">X</div>
+
+            <div class="jc jc-x" id="md-j11">—</div>
+
+            <div class="jc jc-x" id="md-j12">—</div>
+
+            <div class="jc jc-x" id="md-j13">—</div>
+
+            <div class="jrow-lbl axis-y">Y</div>
+
+            <div class="jc jc-y" id="md-j21">—</div>
+
+            <div class="jc jc-y" id="md-j22">—</div>
+
+            <div class="jc jc-y" id="md-j23">—</div>
+
+            <div class="jrow-lbl axis-z">Z</div>
+
+            <div class="jc jc-z" id="md-j31">—</div>
+
+            <div class="jc jc-z" id="md-j32">—</div>
+
+            <div class="jc jc-z" id="md-j33">—</div>
+
+          </div>
+
+
+
+          <div class="sec">Metrics</div>
+
+          <div class="cards cards-3">
+
+            <div class="card">
+
+              <div class="cl">det J</div>
+
+              <div class="cv" id="md-detJ">—</div>
+
+            </div>
+
+            <div class="card">
+
+              <div class="cl">Manipulability μ</div>
+
+              <div class="cv" id="md-mu">—</div>
+
+            </div>
+
+            <div class="card">
+
+              <div class="cl">Reach r</div>
+
+              <div class="cv" id="md-jac-reach">—</div>
+
+            </div>
+
+          </div>
+
+
+
+          <div class="sec">Manipulability Index</div>
+
+          <div class="mu-bar-wrap">
+
+            <div class="mu-bar" id="md-muBar" style="width:0%"></div>
+
+          </div>
+
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted)">
+
+            <span>Singular</span><span id="md-muLabel">μ = —</span><span>High</span>
+
+          </div>
+
+
+
+          <div id="md-singWarn" class="alert">⚠ Near singularity — loss of mobility</div>
+
+        </div>
+
+      </div>
+
+
+
+      <!-- ===== PANEL 4: Analytics Graphs ===== -->
+
+      <div class="panel-card" id="panel-analytics">
+
+        <div class="panel-header">
+
+          <span class="panel-icon">&mdash;</span>
+
+          <span class="panel-title">Live Analytics</span>
+
+          <span class="panel-status" id="analytics-status">Idle</span>
+
+        </div>
+
+        <div class="panel-body">
+
+          <div class="sec">Position Tracking Error</div>
+
+          <div class="chart-wrap"><canvas id="md-cvs-error"></canvas></div>
+
+
+
+          <div class="sec">End-Effector Velocity</div>
+
+          <div class="chart-wrap"><canvas id="md-cvs-velocity"></canvas></div>
+
+
+
+          <div class="sec">Manipulability Index Over Time</div>
+
+          <div class="chart-wrap"><canvas id="md-cvs-mu"></canvas></div>
+
+
+
+          <div class="sec">Task Summary</div>
+
+          <div class="cards">
+
+            <div class="card">
+
+              <div class="cl">State</div>
+
+              <div class="cv" id="md-task-state">IDLE</div>
+
+            </div>
+
+            <div class="card">
+
+              <div class="cl">Cycle</div>
+
+              <div class="cv" id="md-task-cycle">0</div>
+
+            </div>
+
+          </div>
+
+          <div class="cards">
+
+            <div class="card">
+
+              <div class="cl">Avg Error (m)</div>
+
+              <div class="cv" id="md-avg-err">—</div>
+
+            </div>
+
+            <div class="card">
+
+              <div class="cl">Peak μ</div>
+
+              <div class="cv" id="md-peak-mu">—</div>
+
+            </div>
+
+          </div>
+
+
+
+          <div class="placeholder-msg" id="md-analytics-placeholder">
+
+            <div class="icon">&mdash;</div>
+
+            <p>Analytics data will populate when a simulation runs on a robot page.</p>
+
+            <span class="hint">Open a robot simulator and click "Run Simulation"</span>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+
+    </div><!-- /.dashboard -->
+
+  </div><!-- /.page -->
+
+
+
+  <script>
+
+    /* ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+       Math Dashboard — URL Routing + BroadcastChannel Receiver
+
+       ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+    (() => {
+
+      const $ = id => document.getElementById(id);
+
+      const RAD = 180 / Math.PI;
+
+      const DEG = Math.PI / 180;
+
+
+
+      // Two-way BroadcastChannels
+
+      const channel = new BroadcastChannel('jinx_math_sync');    // simulator → dashboard
+
+      const cmdChannel = new BroadcastChannel('jinx_math_cmd');  // dashboard → simulator
+
+      let _suppressSync = false;
+
+
+
+      // URL Parameter Routing
+
+      const params = new URLSearchParams(window.location.search);
+
+      const robotParam = params.get('robot') || 'rrr';
+
+
+
+      // Robot Configs
+
+      const CFG = {
+
+        rrr: {
+
+          dof: 3,
+
+          jointLabels: ['θ₁', 'θ₂', 'θ₃'],
+
+          jacHeaders: ['∂/∂θ₁', '∂/∂θ₂', '∂/∂θ₃'],
+
+          jacGridClass: 'jgrid',
+
+          fk: [
+
+            { label: 'θ₁ Base Yaw', min: -180, max: 180, step: 1, unit: '°', pris: false },
+
+            { label: 'θ₂ Shoulder', min: 15, max: 115, step: 1, unit: '°', pris: false },
+
+            { label: 'θ₃ Elbow', min: 20, max: 145, step: 1, unit: '°', pris: false },
+
+          ],
+
+          ikRng: { xMin: -0.55, xMax: 0.85, yMin: -0.55, yMax: 0.55, zMin: 0, zMax: 0.6 },
+
+          dhRows: [['1', '0', 'π/2', 'L₁', 'θ₁*'], ['2', 'L₂', '0', '0', 'θ₂*'], ['3', 'L₃', '0', '0', 'θ₃*']],
+
+          dhNote: 'L₁=0.15 m · L₂=0.30 m · L₃=0.24 m · (θ variable)',
+
+        },
+
+        scara: {
+
+          dof: 4,
+
+          jointLabels: ['θ₁', 'θ₂', 'd₃', 'θ₄'],
+
+          jacHeaders: ['∂/∂θ₁', '∂/∂θ₂', '∂/∂d₃', '∂/∂θ₄'],
+
+          jacGridClass: 'jgrid-4',
+
+          fk: [
+
+            { label: 'θ₁ Shoulder', min: -135, max: 135, step: 1, unit: '°', pris: false },
+
+            { label: 'θ₂ Elbow', min: -135, max: 135, step: 1, unit: '°', pris: false },
+
+            { label: 'd₃ Prismatic', min: 0, max: 350, step: 1, unit: 'mm', pris: true },
+
+            { label: 'θ₄ Wrist', min: -180, max: 180, step: 1, unit: '°', pris: false },
+
+          ],
+
+          ikRng: { xMin: -0.55, xMax: 0.55, yMin: -0.55, yMax: 0.55, zMin: 0.05, zMax: 0.35 },
+
+          dhRows: [['1', '0', '0', 'd₁', 'θ₁*'], ['2', 'a₂', 'π', '0', 'θ₂*'], ['3', '0', '0', 'd₃*', '0'], ['4', '0', '0', '0', 'θ₄*']],
+
+          dhNote: 'a₂=0.35 m · d₁=0.35 m · d₃ range: 0–350 mm · (θ variable)',
+
+        },
+
+        welder: {
+
+          dof: 6,
+
+          jointLabels: ['θ₁', 'θ₂', 'θ₃', 'θ₄', 'θ₅', 'θ₆'],
+
+          jacHeaders: ['∂/∂θ₁', '∂/∂θ₂', '∂/∂θ₃', '∂/∂θ₄', '∂/∂θ₅', '∂/∂θ₆'],
+
+          jacGridClass: 'jgrid-6',
+
+          fk: [
+
+            { label: 'θ₁ Base', min: -180, max: 180, step: 1, unit: '°', pris: false },
+
+            { label: 'θ₂ Shoulder', min: -90, max: 90, step: 1, unit: '°', pris: false },
+
+            { label: 'θ₂ Elbow', min: -135, max: 135, step: 1, unit: '°', pris: false },
+
+            { label: 'θ₄ Roll', min: -180, max: 180, step: 1, unit: '°', pris: false },
+
+            { label: 'θ₅ Pitch', min: -120, max: 120, step: 1, unit: '°', pris: false },
+
+            { label: 'θ₆ Tool', min: -180, max: 180, step: 1, unit: '°', pris: false },
+
+          ],
+
+          ikRng: { xMin: -0.6, xMax: 0.6, yMin: -0.6, yMax: 0.6, zMin: 0, zMax: 0.6 },
+
+          dhRows: [['1', '0', 'π/2', 'd₁', 'θ₁*'], ['2', 'a₂', '0', '0', 'θ₂*'], ['3', '0', 'π/2', '0', 'θ₃*'],
+
+          ['4', '0', '-π/2', 'd₄', 'θ₄*'], ['5', '0', 'π/2', '0', 'θ₅*'], ['6', '0', '0', 'd₆', 'θ₆*']],
+
+          dhNote: 'a₂=0.30 m · d₁=0.20 m · d₄=0.20 m · d₆=0.08 m · (θ variable)',
+
+        },
+
+      };
+
+
+
+      function applyRobotLayout(robot) {
+
+        const c = CFG[robot] || CFG.rrr;
+
+
+
+        // Joint config cards
+
+        const jc = $('md-joint-cards');
+
+        if (jc) {
+
+          jc.className = `cards cards-${Math.min(c.dof, 4)}`;
+
+          jc.innerHTML = '';
+
+          c.jointLabels.forEach((l, i) => {
+
+            jc.innerHTML += `<div class="card"><div class="cl">${l}</div><div class="cv" id="md-q${i + 1}">0.0°</div></div>`;
+
+          });
+
+        }
+
+
+
+        // FK Joint Sliders
+
+        const box = $('md-fk-sliders');
+
+        if (box) {
+
+          box.innerHTML = '';
+
+          c.fk.forEach((s, i) => {
+
+            box.innerHTML += `<div class="ctrl" style="flex-direction:row;align-items:center;gap:10px">
+
+              <label style="min-width:105px;font-size:11px">${s.label}</label>
+
+              <input type="range" id="md-fk-s${i}" min="${s.min}" max="${s.max}" value="0" step="${s.step}" style="flex:1">
+
+              <span class="val" id="md-fk-sv${i}">0${s.unit}</span></div>`;
+
+          });
+
+          // Wire FK slider events
+
+          c.fk.forEach((s, i) => {
+
+            const sl = $(`md-fk-s${i}`);
+
+            if (!sl) return;
+
+            sl.addEventListener('input', () => {
+
+              $(`md-fk-sv${i}`).textContent = parseFloat(sl.value).toFixed(0) + s.unit;
+
+              _suppressSync = true;
+
+              const q = [];
+
+              for (let j = 0; j < c.dof; j++) {
+
+                const sv = parseFloat($(`md-fk-s${j}`)?.value || 0);
+
+                q.push(c.fk[j].pris ? sv / 1000 : sv * DEG);
+
+              }
+
+              cmdChannel.postMessage({ type: 'fk', robot, q });
+
+              setTimeout(() => { _suppressSync = false; }, 120);
+
+            });
+
+          });
+
+        }
+
+
+
+        // IK slider ranges
+
+        const rng = c.ikRng;
+
+        const ikxt = $('md-ik-xt'); if (ikxt) { ikxt.min = rng.xMin; ikxt.max = rng.xMax; }
+
+        const ikyt = $('md-ik-yt'); if (ikyt) { ikyt.min = rng.yMin; ikyt.max = rng.yMax; }
+
+        const ikzt = $('md-ik-zt'); if (ikzt) { ikzt.min = rng.zMin; ikzt.max = rng.zMax; }
+
+
+
+        // IK solution cards
+
+        const ik = $('md-ik-sol-cards');
+
+        if (ik) {
+
+          ik.className = `cards cards-${Math.min(c.dof, 4)}`;
+
+          ik.innerHTML = '';
+
+          c.jointLabels.forEach((l, i) => {
+
+            ik.innerHTML += `<div class="card"><div class="cl">${l}</div><div class="cv" id="md-ik-t${i + 1}">—</div></div>`;
+
+          });
+
+        }
+
+
+
+        // Jacobian grid
+
+        const jg = $('md-jac-grid');
+
+        if (jg) {
+
+          jg.className = c.jacGridClass;
+
+          jg.innerHTML = '<div></div>';
+
+          c.jacHeaders.forEach(h => { jg.innerHTML += `<div class="jh">${h}</div>`; });
+
+          const rl = ['X', 'Y', 'Z'], ac = ['axis-x', 'axis-y', 'axis-z'], cc = ['jc-x', 'jc-y', 'jc-z'];
+
+          for (let r = 0; r < 3; r++) {
+
+            jg.innerHTML += `<div class="jrow-lbl ${ac[r]}">${rl[r]}</div>`;
+
+            for (let k = 0; k < c.dof; k++)
+
+              jg.innerHTML += `<div class="jc ${cc[r]}" id="md-j${r + 1}${k + 1}">—</div>`;
+
+          }
+
+        }
+
+
+
+        // DH table
+
+        const dt = $('md-dh-table');
+
+        if (dt) {
+
+          dt.innerHTML = '<tr><th>i</th><th>aᵢ</th><th>αᵢ</th><th>dᵢ</th><th>θᵢ</th></tr>';
+
+          c.dhRows.forEach(row => { dt.innerHTML += `<tr>${row.map(v => `<td>${v}</td>`).join('')}</tr>`; });
+
+        }
+
+        const dn = $('md-dh-note'); if (dn) dn.textContent = c.dhNote;
+
+        window.__mdRobot = robot;
+
+        window.__mdDOF = c.dof;
+
+      }
+
+      // Apply layout now that CFG and the function are both initialized
+
+      applyRobotLayout(robotParam);
+
+
+
+      // Wire IK sliders
+
+      ['md-ik-xt', 'md-ik-yt', 'md-ik-zt'].forEach(id => {
+
+        const el = $(id); if (!el) return;
+
+        el.addEventListener('input', () => {
+
+          const xt = +$('md-ik-xt').value, yt = +$('md-ik-yt').value, zt = +$('md-ik-zt').value;
+
+          $('md-ik-xtv').textContent = xt.toFixed(2);
+
+          $('md-ik-ytv').textContent = yt.toFixed(2);
+
+          $('md-ik-ztv').textContent = zt.toFixed(2);
+
+          cmdChannel.postMessage({ type: 'ik', robot: window.__mdRobot, target: [xt, yt, zt] });
+
+        });
+
+      });
+
+
+
+      // ═══════════════════════════════════════════════════
+
+      //  Chart.js Analytics — Dark-themed, 100-point rolling
+
+      // ═══════════════════════════════════════════════════
+
+      const MAX_PTS = 100;
+
+      const GRID_CLR = 'rgba(255,255,255,0.06)';
+
+      const TICK_CLR = 'rgba(255,255,255,0.35)';
+
+      const FONT_FAM = "'JetBrains Mono', monospace";
+
+
+
+      function mkScales(yLabel, sMin, sMax) {
+
+        return {
+
+          x: {
+
+            display: true, title: { display: true, text: 'Time (s)', color: TICK_CLR, font: { family: FONT_FAM, size: 9 } },
+
+            ticks: { color: TICK_CLR, font: { family: FONT_FAM, size: 8 }, maxTicksLimit: 6 }, grid: { color: GRID_CLR }
+
+          },
+
+          y: {
+
+            display: true, title: { display: true, text: yLabel, color: TICK_CLR, font: { family: FONT_FAM, size: 9 } },
+
+            ticks: { color: TICK_CLR, font: { family: FONT_FAM, size: 8 }, maxTicksLimit: 5 }, grid: { color: GRID_CLR },
+
+            suggestedMin: sMin, suggestedMax: sMax, beginAtZero: true
+
+          },
+
+        };
+
+      }
+
+
+
+      function mkCfg(datasets, yLabel, sMin, sMax) {
+
+        return {
+
+          type: 'line',
+
+          data: { labels: [], datasets },
+
+          options: {
+
+            responsive: true, maintainAspectRatio: false, animation: false,
+
+            interaction: { intersect: false, mode: 'index' },
+
+            plugins: {
+
+              legend: {
+
+                display: datasets.length > 1, position: 'top',
+
+                labels: { color: TICK_CLR, font: { family: FONT_FAM, size: 9 }, boxWidth: 10, boxHeight: 2, padding: 8 }
+
+              },
+
+              tooltip: {
+
+                enabled: true, backgroundColor: 'rgba(10,10,22,0.92)', titleColor: '#fff', bodyColor: TICK_CLR,
+
+                borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
+
+                titleFont: { family: FONT_FAM, size: 10 }, bodyFont: { family: FONT_FAM, size: 9 }
+
+              },
+
+            },
+
+            scales: mkScales(yLabel, sMin, sMax),
+
+            elements: { point: { radius: 0, hoverRadius: 4 }, line: { tension: 0.3, borderWidth: 2.2 } },
+
+            layout: { padding: { left: 2, right: 8, top: 4, bottom: 2 } },
+
+          },
+
+        };
+
+      }
+
+
+
+      function mkDS(label, color, dashed) {
+
+        return { label, data: [], borderColor: color, backgroundColor: color + '20', fill: true, borderDash: dashed ? [4, 3] : [] };
+
+      }
+
+
+
+      // Create three Chart.js instances
+
+      const chartLabels = [];
+
+      const errChart = new Chart($('md-cvs-error').getContext('2d'), mkCfg([mkDS('|e|', '#ff5c5c')], 'Error (m)', 0, 0.05));
+
+      const velChart = new Chart($('md-cvs-velocity').getContext('2d'), mkCfg([mkDS('|ẋ|', '#4da6ff')], 'Velocity (m/s)', 0, 0.5));
+
+      const muChart = new Chart($('md-cvs-mu').getContext('2d'), mkCfg([mkDS('μ', '#00f07f')], 'Manipulability', 0, 0.04));
+
+
+
+      let peakMu = 0, sampleCount = 0, firstData = false, lastEE = null, lastT = performance.now();
+
+      let chartTime = 0;
+
+
+
+      // Receiver
+
+      channel.onmessage = (e) => {
+
+        const d = e.data;
+
+        if (d.robot !== window.__mdRobot) return;
+
+        if (_suppressSync) return;
+
+        const c = CFG[d.robot] || CFG.rrr;
+
+
+
+        // FK Panel
+
+        const fkX = $('md-fk-x'), fkY = $('md-fk-y'), fkZ = $('md-fk-z');
+
+        if (fkX) fkX.textContent = d.ee[0].toFixed(4);
+
+        if (fkY) fkY.textContent = d.ee[1].toFixed(4);
+
+        if (fkZ) fkZ.textContent = d.ee[2].toFixed(4);
+
+        const fs = $('fk-status'); if (fs) { fs.textContent = 'Live'; fs.style.color = 'var(--grn)'; }
+
+
+
+        // Joint cards + FK sliders sync
+
+        for (let i = 0; i < d.q.length; i++) {
+
+          const el = $(`md-q${i + 1}`);
+
+          const s = c.fk[i];
+
+          const dv = s?.pris ? (d.q[i] * 1000).toFixed(1) + ' mm' : (d.q[i] * RAD).toFixed(1) + '°';
+
+          if (el) el.textContent = dv;
+
+          const sl = $(`md-fk-s${i}`), sv = $(`md-fk-sv${i}`);
+
+          if (sl && sv) {
+
+            const nv = s?.pris ? (d.q[i] * 1000) : (d.q[i] * RAD);
+
+            sl.value = nv.toFixed(0);
+
+            sv.textContent = nv.toFixed(0) + (s?.unit || '°');
+
+          }
+
+        }
+
+
+
+        // IK Panel
+
+        for (let i = 0; i < d.q.length; i++) {
+
+          const el = $(`md-ik-t${i + 1}`);
+
+          if (!el) continue;
+
+          el.textContent = c.fk[i]?.pris ? (d.q[i] * 1000).toFixed(1) + ' mm' : (d.q[i] * RAD).toFixed(1) + '°';
+
+        }
+
+        const ike = $('md-ik-err'); if (ike) ike.textContent = (d.error ?? 0).toExponential(2) + ' m';
+
+        const ikc = $('md-ik-conv');
+
+        if (ikc) { ikc.textContent = d.converged !== false ? '✓ Yes' : '✗ No'; ikc.style.color = d.converged !== false ? 'var(--grn)' : 'var(--red2)'; }
+
+        const iki = $('md-ik-iter'); if (iki) iki.textContent = d.iterations ?? '—';
+
+        const ikr = $('md-ik-reach'); if (ikr) ikr.textContent = (d.reach ?? 0).toFixed(4) + ' m';
+
+        const ikl = $('md-ik-lambda'); if (ikl) ikl.textContent = d.robot === 'rrr' ? 'N/A (closed)' : '0.08';
+
+        const is = $('ik-status');
+
+        if (is) { is.textContent = d.converged !== false ? 'Converged' : 'Failed'; is.style.color = d.converged !== false ? 'var(--grn)' : 'var(--red2)'; }
+
+
+
+        // Sync IK sliders to EE
+
+        const ix = $('md-ik-xt'), iy = $('md-ik-yt'), iz = $('md-ik-zt');
+
+        if (ix) { ix.value = d.ee[0].toFixed(2); $('md-ik-xtv').textContent = d.ee[0].toFixed(2); }
+
+        if (iy) { iy.value = d.ee[1].toFixed(2); $('md-ik-ytv').textContent = d.ee[1].toFixed(2); }
+
+        if (iz) { iz.value = d.ee[2].toFixed(2); $('md-ik-ztv').textContent = d.ee[2].toFixed(2); }
+
+
+
+        // Jacobian Panel
+
+        const J = d.jacobian;
+
+        if (J && Array.isArray(J)) {
+
+          const rows = J.length, cols = J[0]?.length || 0;
+
+          let mx = 1e-9;
+
+          for (let r = 0; r < rows; r++) for (let k = 0; k < cols; k++) mx = Math.max(mx, Math.abs(J[r][k]));
+
+          for (let r = 0; r < rows; r++) for (let k = 0; k < cols; k++) {
+
+            const el = $(`md-j${r + 1}${k + 1}`); if (!el) continue;
+
+            const v = J[r][k], n = v / mx; el.textContent = v.toFixed(3);
+
+            if (Math.abs(v) < 0.001) { el.style.background = 'rgba(80,80,100,0.3)'; el.style.color = '#555580'; }
+
+            else if (n > 0) { el.style.background = `rgba(32,${Math.round(80 + n * 120)},60,0.25)`; el.style.color = `rgb(50,${Math.round(160 + n * 95)},80)`; }
+
+            else { el.style.background = `rgba(${Math.round(80 + (-n) * 120)},30,30,0.25)`; el.style.color = `rgb(${Math.round(160 + (-n) * 95)},50,50)`; }
+
+          }
+
+        }
+
+
+
+        // Jacobian metrics
+
+        const de = $('md-detJ'); if (de) de.textContent = (d.detJ ?? 0).toFixed(4);
+
+        const me = $('md-mu'); if (me) me.textContent = (d.mu ?? 0).toFixed(5);
+
+        const jr = $('md-jac-reach'); if (jr) jr.textContent = (d.reach ?? 0).toFixed(4) + ' m';
+
+        const pct = Math.min((d.mu ?? 0) / 0.04 * 100, 100);
+
+        const mb = $('md-muBar');
+
+        if (mb) { mb.style.width = pct + '%'; const rp = Math.round(pct * 2.55); mb.style.background = `rgb(${255 - rp},${rp},60)`; }
+
+        const ml = $('md-muLabel'); if (ml) ml.textContent = 'μ = ' + (d.mu ?? 0).toFixed(5);
+
+        const sw = $('md-singWarn'); if (sw) sw.classList.toggle('on', (d.mu ?? 1) < 0.002);
+
+        const js = $('jac-status'); if (js) { js.textContent = 'Live'; js.style.color = 'var(--grn)'; }
+
+
+
+        // ══ Chart.js Analytics Update ══
+
+        if (!firstData) {
+
+          firstData = true;
+
+          const ph = $('md-analytics-placeholder'); if (ph) ph.style.display = 'none';
+
+          const as = $('analytics-status'); if (as) { as.textContent = 'Streaming'; as.style.color = 'var(--grn)'; }
+
+        }
+
+
+
+        const now = performance.now(), dt = (now - lastT) / 1000; lastT = now;
+
+        chartTime += dt;
+
+        let vel = 0;
+
+        if (lastEE) vel = Math.sqrt((d.ee[0] - lastEE[0]) ** 2 + (d.ee[1] - lastEE[1]) ** 2 + (d.ee[2] - lastEE[2]) ** 2) / Math.max(dt, 0.001);
+
+        lastEE = [...d.ee];
+
+
+
+        const errVal = d.error ?? 0;
+
+        const muVal = d.mu ?? 0;
+
+        peakMu = Math.max(peakMu, muVal);
+
+        sampleCount++;
+
+
+
+        // Push to Chart.js datasets
+
+        const tLabel = chartTime.toFixed(1);
+
+        chartLabels.push(tLabel);
+
+        errChart.data.datasets[0].data.push(errVal);
+
+        velChart.data.datasets[0].data.push(vel);
+
+        muChart.data.datasets[0].data.push(muVal);
+
+
+
+        // Cap at MAX_PTS
+
+        if (chartLabels.length > MAX_PTS) {
+
+          chartLabels.shift();
+
+          errChart.data.datasets[0].data.shift();
+
+          velChart.data.datasets[0].data.shift();
+
+          muChart.data.datasets[0].data.shift();
+
+        }
+
+
+
+        // Sync labels and update (throttle to every 3rd frame)
+
+        if (sampleCount % 3 === 0) {
+
+          errChart.data.labels = chartLabels;
+
+          velChart.data.labels = chartLabels;
+
+          muChart.data.labels = chartLabels;
+
+          errChart.update('none');
+
+          velChart.update('none');
+
+          muChart.update('none');
+
+        }
+
+
+
+        // Task summary cards
+
+        const se = $('md-task-state'); if (se) se.textContent = d.status ?? 'active';
+
+        const pe = $('md-peak-mu'); if (pe) pe.textContent = peakMu.toFixed(5);
+
+        const ce = $('md-task-cycle'); if (ce) ce.textContent = sampleCount;
+
+        const ae = $('md-avg-err');
+
+        if (ae && errChart.data.datasets[0].data.length > 0) {
+
+          const arr = errChart.data.datasets[0].data;
+
+          const avg = arr.reduce((a, b) => a + b, 0) / arr.length;
+
+          ae.textContent = avg.toExponential(2) + ' m';
+
+        }
+
+      };
+
+    })();
+
+  </script>
+
+</body>
+
+
+
+</html>
+

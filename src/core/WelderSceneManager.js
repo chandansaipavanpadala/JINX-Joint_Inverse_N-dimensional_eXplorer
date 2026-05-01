@@ -31,7 +31,7 @@ export class WelderSceneManager {
     // ── Scene — dark, smoky welding booth atmosphere ──
     this._scene = new THREE.Scene();
     this._scene.background = new THREE.Color(0x06060c);
-    this._scene.fog = new THREE.FogExp2(0x06060c, 0.28);
+    this._scene.fog = new THREE.FogExp2(0x06060c, 0.12);
 
     // ── Camera ──
     this._camera = new THREE.PerspectiveCamera(50, wrap.clientWidth / wrap.clientHeight, 0.01, 10);
@@ -95,10 +95,10 @@ export class WelderSceneManager {
     const s = this._scene;
 
     // Very dim ambient — booth feels dark until spark ignites
-    s.add(new THREE.AmbientLight(0x304060, 0.45));
+    s.add(new THREE.AmbientLight(0x304060, 1.0));
 
     // Single overhead — dim blue-white, casts shadows
-    const sun = new THREE.DirectionalLight(0xb0c0e0, 0.65);
+    const sun = new THREE.DirectionalLight(0xb0c0e0, 1.2);
     sun.position.set(0.5, 4.0, 0.5);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -110,12 +110,12 @@ export class WelderSceneManager {
     s.add(sun);
 
     // Cool rim from behind — silhouette the robot
-    const rim = new THREE.DirectionalLight(0x304080, 0.30);
+    const rim = new THREE.DirectionalLight(0x304080, 0.55);
     rim.position.set(-1, 1.5, -2);
     s.add(rim);
 
     // Faint warm ground bounce
-    const bounce = new THREE.DirectionalLight(0x503020, 0.15);
+    const bounce = new THREE.DirectionalLight(0x503020, 0.30);
     bounce.position.set(0, -0.5, 0);
     s.add(bounce);
   }
@@ -434,6 +434,20 @@ export class WelderSceneManager {
     this._sparkLight.add(sparkGlow);
     this._sparkLight.visible = false;
     s.add(this._sparkLight);
+
+    // ── Clickable Link Mesh Registry ──
+    // dhIndex = which row in WELDING_DH_CONFIG;  dhKey = 'a' or 'd'
+    this._linkMeshes = [
+      { mesh: this._links[0], dhIndex: 0, dhKey: 'd', label: 'Base Column (d₁)',
+        defaultLen: BASE_H, min: 0.10, max: 0.50 },
+      { mesh: this._links[1], dhIndex: 1, dhKey: 'a', label: 'Upper Arm (a₂)',
+        defaultLen: L_UPPER, min: 0.15, max: 0.60 },
+      { mesh: this._links[2], dhIndex: 2, dhKey: 'a', label: 'Forearm (a₃)',
+        defaultLen: L_FORE, min: 0.10, max: 0.50 },
+    ];
+    this._highlightedLink = -1;
+    this._savedEmissive = null;
+    this._savedEmissiveIntensity = 0;
   }
 
   /* ════════════════════════════════════════════════════════
@@ -654,4 +668,55 @@ export class WelderSceneManager {
   get controls() { return this._controls; }
   get table()    { return this._table; }
   get eeWorldPos() { return this._eeWorldPos; }
+
+  /** Clickable link mesh entries (array of metadata) */
+  get linkMeshes() { return this._linkMeshes; }
+
+  /** Just the Three.js mesh objects for raycasting */
+  get linkMeshArray() { return this._linkMeshes.map(e => e.mesh); }
+
+  /* ════════════════════════════════════════════════════════
+     Link Resizing — dynamic DH parameter + mesh updates
+     ════════════════════════════════════════════════════════ */
+
+  /**
+   * Dynamically resize a Welder link.
+   * Updates the DH config parameter and triggers FK re-evaluation.
+   * The actual cylinder meshes are re-stretched by _alignCylinder in updateScene.
+   * @param {number} index  - Index into _linkMeshes (0=base col, 1=upper arm, 2=forearm)
+   * @param {number} newLen - New length in meters
+   */
+  resizeLink(index, newLen) {
+    const entry = this._linkMeshes[index];
+    if (!entry) return;
+    // Update the mutable DH config
+    WELDING_DH_CONFIG[entry.dhIndex][entry.dhKey] = newLen;
+    // Note: cylinder meshes are dynamically stretched every frame by _alignCylinder,
+    // so no geometry rebuild is needed — the next updateScene() call handles it.
+  }
+
+  /**
+   * Highlight a link with emissive glow.
+   * @param {number} index - Link index to highlight
+   */
+  highlightLink(index) {
+    this.clearHighlight();
+    if (index < 0 || index >= this._linkMeshes.length) return;
+    const mat = this._linkMeshes[index].mesh.material;
+    this._savedEmissive = mat.emissive.getHex();
+    this._savedEmissiveIntensity = mat.emissiveIntensity;
+    mat.emissive.setHex(0x00e5ff);
+    mat.emissiveIntensity = 0.6;
+    this._highlightedLink = index;
+  }
+
+  /** Clear link highlight */
+  clearHighlight() {
+    if (this._highlightedLink >= 0 && this._highlightedLink < this._linkMeshes.length) {
+      const mat = this._linkMeshes[this._highlightedLink].mesh.material;
+      mat.emissive.setHex(this._savedEmissive || 0x000000);
+      mat.emissiveIntensity = this._savedEmissiveIntensity || 0;
+    }
+    this._highlightedLink = -1;
+  }
 }
