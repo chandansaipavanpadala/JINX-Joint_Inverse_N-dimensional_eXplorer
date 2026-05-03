@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
 export default defineConfig({
+  base: '/JINX-Joint_Inverse_N-dimensional_eXplorer/',
   // Multi-page app configuration — each robot page is a separate entry
   build: {
     rollupOptions: {
