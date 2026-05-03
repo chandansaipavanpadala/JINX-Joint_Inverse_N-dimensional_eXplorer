@@ -109,6 +109,7 @@ export class WelderUIController {
     this._linkDefault = $('linkCardDefault');
 
     // BroadcastChannel for math dashboard sync
+    this._frameCount = 0;
     this._mathChannel = new BroadcastChannel('jinx_math_sync');
     // Command channel — receive FK/IK commands from dashboard
     this._cmdChannel = new BroadcastChannel('jinx_math_cmd');
@@ -347,38 +348,41 @@ export class WelderUIController {
     // Jacobian & Singularity metrics
     this._updateJacobian();
 
-    // ── Broadcast to Math Dashboard ──
-    const jac = jacobian(this.q, WELDING_DH_CONFIG);
-    const n = 6;
-    const J2d = [];
-    for (let r = 0; r < 3; r++) {
-      const row = [];
-      for (let c = 0; c < n; c++) row.push(jac.J[r * n + c]);
-      J2d.push(row);
-    }
-    const JJt_bc = new Float64Array(9);
-    for (let i = 0; i < 3; i++)
-      for (let j = 0; j < 3; j++) {
-        let sum = 0;
-        for (let k = 0; k < n; k++) sum += jac.J[i * n + k] * jac.J[j * n + k];
-        JJt_bc[i * 3 + j] = sum;
+    // ── Broadcast to Math Dashboard (throttled to every 2nd frame) ──
+    this._frameCount++;
+    if (this._frameCount % 2 === 0) {
+      const jac = jacobian(this.q, WELDING_DH_CONFIG);
+      const n = 6;
+      const J2d = [];
+      for (let r = 0; r < 3; r++) {
+        const row = [];
+        for (let c = 0; c < n; c++) row.push(jac.J[r * n + c]);
+        J2d.push(row);
       }
-    const det_bc = JJt_bc[0] * (JJt_bc[4] * JJt_bc[8] - JJt_bc[5] * JJt_bc[7])
-      - JJt_bc[1] * (JJt_bc[3] * JJt_bc[8] - JJt_bc[5] * JJt_bc[6])
-      + JJt_bc[2] * (JJt_bc[3] * JJt_bc[7] - JJt_bc[4] * JJt_bc[6]);
-    const mu_bc = Math.sqrt(Math.max(0, det_bc));
-    this._mathChannel.postMessage({
-      robot: 'welder',
-      q: [...this.q],
-      ee: [...position],
-      jacobian: J2d,
-      mu: mu_bc,
-      detJ: det_bc,
-      reach: Math.sqrt(position[0] ** 2 + position[1] ** 2 + position[2] ** 2),
-      error: 0,
-      converged: true,
-      status: this.isWelding ? 'welding' : 'ready'
-    });
+      const JJt_bc = new Float64Array(9);
+      for (let i = 0; i < 3; i++)
+        for (let j = 0; j < 3; j++) {
+          let sum = 0;
+          for (let k = 0; k < n; k++) sum += jac.J[i * n + k] * jac.J[j * n + k];
+          JJt_bc[i * 3 + j] = sum;
+        }
+      const det_bc = JJt_bc[0] * (JJt_bc[4] * JJt_bc[8] - JJt_bc[5] * JJt_bc[7])
+        - JJt_bc[1] * (JJt_bc[3] * JJt_bc[8] - JJt_bc[5] * JJt_bc[6])
+        + JJt_bc[2] * (JJt_bc[3] * JJt_bc[7] - JJt_bc[4] * JJt_bc[6]);
+      const mu_bc = Math.sqrt(Math.max(0, det_bc));
+      this._mathChannel.postMessage({
+        robot: 'welder',
+        q: [...this.q],
+        ee: [...position],
+        jacobian: J2d,
+        mu: mu_bc,
+        detJ: det_bc,
+        reach: Math.sqrt(position[0] ** 2 + position[1] ** 2 + position[2] ** 2),
+        error: 0,
+        converged: true,
+        status: this.isWelding ? 'welding' : 'ready'
+      });
+    }
   }
 
   /* ═══════════ Sync Sliders to Current q ═══════════ */

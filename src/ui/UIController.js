@@ -26,6 +26,8 @@ export default class UIController {
     this.trapT = 0;
     this.trapTTotal = 0.5;
     this.trailBuf = [];
+    // BroadcastChannel frame throttle
+    this._frameCount = 0;
     // Raycaster
     this._raycaster = new THREE.Raycaster();
     this._mouse = new THREE.Vector2();
@@ -217,19 +219,22 @@ export default class UIController {
 
     this._updateJacobian(t1, t2, t3, f, J, mu);
 
-    // ── Broadcast to Math Dashboard ──
-    this._mathChannel.postMessage({
-      robot: 'rrr',
-      q: [t1, t2, t3],
-      ee: [f.x, f.y, f.z],
-      jacobian: J,
-      mu,
-      detJ: det3(J),
-      reach: f.r,
-      error: err,
-      converged: !!sol,
-      status: limOk ? 'valid' : 'limit'
-    });
+    // ── Broadcast to Math Dashboard (throttled to every 2nd frame) ──
+    this._frameCount++;
+    if (this._frameCount % 2 === 0) {
+      this._mathChannel.postMessage({
+        robot: 'rrr',
+        q: [t1, t2, t3],
+        ee: [f.x, f.y, f.z],
+        jacobian: J,
+        mu,
+        detJ: det3(J),
+        reach: f.r,
+        error: err,
+        converged: !!sol,
+        status: limOk ? 'valid' : 'limit'
+      });
+    }
   }
 
   /* ═══════════ Jacobian Display ═══════════ */
@@ -439,19 +444,22 @@ export default class UIController {
       $('simSddot').textContent = sddot.toFixed(2);
       this.drawTrapProfile();
 
-      // ── Broadcast to Math Dashboard during simulation ──
-      this._mathChannel.postMessage({
-        robot: 'rrr',
-        q: [t1, t2, t3],
-        ee: [fv.x, fv.y, fv.z],
-        jacobian: J,
-        mu,
-        detJ: det3(J),
-        reach: fv.r,
-        error: err,
-        converged: true,
-        status: 'simulating'
-      });
+      // ── Broadcast to Math Dashboard during simulation (throttled) ──
+      this._frameCount++;
+      if (this._frameCount % 2 === 0) {
+        this._mathChannel.postMessage({
+          robot: 'rrr',
+          q: [t1, t2, t3],
+          ee: [fv.x, fv.y, fv.z],
+          jacobian: J,
+          mu,
+          detJ: det3(J),
+          reach: fv.r,
+          error: err,
+          converged: true,
+          status: 'simulating'
+        });
+      }
     }
     this.simRAF = requestAnimationFrame(() => this._runSim());
   }
