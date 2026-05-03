@@ -1,5 +1,4 @@
 import { defineConfig } from 'vite';
-import { resolve } from 'path';
 
 export default defineConfig({
   base: '/JINX-Joint_Inverse_N-dimensional_eXplorer/',
@@ -7,11 +6,11 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
-        main: resolve(__dirname, 'index.html'),
-        rrrLamp: resolve(__dirname, 'src/pages/rrr-lamp.html'),
-        scara: resolve(__dirname, 'src/pages/scara.html'),
-        welder: resolve(__dirname, 'src/pages/welder.html'),
-        mathDashboard: resolve(__dirname, 'src/pages/math-dashboard.html'),
+        main: 'index.html',
+        rrr: 'src/pages/rrr-lamp.html',
+        scara: 'src/pages/scara.html',
+        welder: 'src/pages/welder.html',
+        math: 'src/pages/math-dashboard.html',
       },
     },
   },
