@@ -206,7 +206,7 @@ export class WelderUIController {
 
     // Math dashboard
     const mathBtn = $('btn-math-panel');
-    if (mathBtn) mathBtn.addEventListener('click', () => window.open('/src/pages/math-dashboard.html?robot=welder', '_blank'));
+    if (mathBtn) mathBtn.addEventListener('click', () => window.open('./math-dashboard.html?robot=welder', '_blank'));
 
     // Raycaster — link click detection
     const dom = this.sm.renderer.domElement;
@@ -364,8 +364,8 @@ export class WelderUIController {
         JJt_bc[i * 3 + j] = sum;
       }
     const det_bc = JJt_bc[0] * (JJt_bc[4] * JJt_bc[8] - JJt_bc[5] * JJt_bc[7])
-                 - JJt_bc[1] * (JJt_bc[3] * JJt_bc[8] - JJt_bc[5] * JJt_bc[6])
-                 + JJt_bc[2] * (JJt_bc[3] * JJt_bc[7] - JJt_bc[4] * JJt_bc[6]);
+      - JJt_bc[1] * (JJt_bc[3] * JJt_bc[8] - JJt_bc[5] * JJt_bc[6])
+      + JJt_bc[2] * (JJt_bc[3] * JJt_bc[7] - JJt_bc[4] * JJt_bc[6]);
     const mu_bc = Math.sqrt(Math.max(0, det_bc));
     this._mathChannel.postMessage({
       robot: 'welder',
@@ -492,8 +492,8 @@ export class WelderUIController {
       }
 
     const d = JJt[0] * (JJt[4] * JJt[8] - JJt[5] * JJt[7])
-            - JJt[1] * (JJt[3] * JJt[8] - JJt[5] * JJt[6])
-            + JJt[2] * (JJt[3] * JJt[7] - JJt[4] * JJt[6]);
+      - JJt[1] * (JJt[3] * JJt[8] - JJt[5] * JJt[6])
+      + JJt[2] * (JJt[3] * JJt[7] - JJt[4] * JJt[6]);
     const mu = Math.sqrt(Math.max(0, d));
 
     const eDet = $('val-det'), eMu = $('val-mu'), warn = $('singularity-warn');
