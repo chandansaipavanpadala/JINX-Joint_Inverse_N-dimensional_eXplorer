@@ -134,7 +134,7 @@ export default class ScaraUIController {
 
     // Math dashboard
     const mathBtn = $('btn-math-panel');
-    if (mathBtn) mathBtn.addEventListener('click', () => window.open('./math-dashboard.html?robot=scara', '_blank'));
+    if (mathBtn) mathBtn.addEventListener('click', () => window.open('math-dashboard.html?robot=scara', '_blank'));
   }
 
   /* ═══════════ Tabs ═══════════ */

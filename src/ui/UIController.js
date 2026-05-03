@@ -101,7 +101,7 @@ export default class UIController {
     $('sbtn').addEventListener('click', () => this.toggleSim());
     // Math dashboard
     const mathBtn = $('btn-math-panel');
-    if (mathBtn) mathBtn.addEventListener('click', () => window.open('./math-dashboard.html?robot=rrr', '_blank'));
+    if (mathBtn) mathBtn.addEventListener('click', () => window.open('math-dashboard.html?robot=rrr', '_blank'));
     // Camera apply
     $('camApplyBtn').addEventListener('click', () => this.applyCameraIK());
     // Raycaster

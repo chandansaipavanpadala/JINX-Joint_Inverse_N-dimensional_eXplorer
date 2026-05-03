@@ -206,7 +206,7 @@ export class WelderUIController {
 
     // Math dashboard
     const mathBtn = $('btn-math-panel');
-    if (mathBtn) mathBtn.addEventListener('click', () => window.open('./math-dashboard.html?robot=welder', '_blank'));
+    if (mathBtn) mathBtn.addEventListener('click', () => window.open('math-dashboard.html?robot=welder', '_blank'));
 
     // Raycaster — link click detection
     const dom = this.sm.renderer.domElement;
